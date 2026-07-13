@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flipwatch</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div>
+    <h1>Flipwatch</h1>
+    <div id="hdr-status" class="muted">—</div>
+  </div>
+  <div class="hdr-actions">
+    <span id="plan-chip" class="chip" hidden></span>
+    <button id="btn-settings" class="icon-btn" title="Account & settings">⚙</button>
+  </div>
+</header>
+
+<!-- Signed-out / expired gate -->
+<section id="gate" hidden>
+  <div class="gate-card">
+    <h2 id="gate-title">Sign in to start monitoring</h2>
+    <p id="gate-text" class="muted">Your saved searches, alerts, and portfolio sync to your account.</p>
+    <button id="gate-btn" class="primary">Open account settings</button>
+  </div>
+</section>
+
+<main id="app" hidden>
+
+  <nav id="tabs">
+    <button class="tab on" data-tab="feed">Feed</button>
+    <button class="tab" data-tab="auctions">Auctions</button>
+    <button class="tab" data-tab="saved">Saved</button>
+    <button class="tab" data-tab="portfolio">Portfolio</button>
+  </nav>
+
+  <!-- ── FEED ─────────────────────────────────────────────── -->
+  <section id="tab-feed" class="pane on">
+    <div class="searches-bar">
+      <select id="search-filter">
+        <option value="">All searches</option>
+      </select>
+      <button id="btn-add-search" class="secondary">+ New search</button>
+    </div>
+
+    <form id="search-form" hidden>
+      <input type="hidden" id="sf-id">
+      <div class="row">
+        <input id="sf-label" placeholder="Label (e.g. Charizard PSA lots)" required>
+      </div>
+      <div class="row">
+        <input id="sf-keywords" placeholder="eBay keywords" required>
+      </div>
+      <div class="row two">
+        <input id="sf-min" type="number" min="0" step="0.01" placeholder="Min $">
+        <input id="sf-max" type="number" min="0" step="0.01" placeholder="Max $">
+      </div>
+      <div class="row two">
+        <select id="sf-type">
+          <option value="FIXED_PRICE">Buy It Now</option>
+          <option value="AUCTION">Auctions</option>
+          <option value="FIXED_PRICE,AUCTION">Both</option>
+        </select>
+        <select id="sf-poll">
+          <option value="15">every 15s (Pro)</option>
+          <option value="30">every 30s</option>
+          <option value="60" selected>every 60s</option>
+          <option value="300">every 5 min</option>
+        </select>
+      </div>
+      <div class="row checks">
+        <label><input type="checkbox" id="sf-us" checked> US only</label>
+        <label><input type="checkbox" id="sf-notify" checked> Notify</label>
+        <label><input type="checkbox" id="sf-active" checked> Active</label>
+      </div>
+      <div class="row">
+        <input id="sf-blocked" placeholder="Blocked sellers (comma-separated)">
+      </div>
+      <div class="row two">
+        <button type="submit" class="primary">Save search</button>
+        <button type="button" id="sf-cancel" class="secondary">Cancel</button>
+      </div>
+      <button type="button" id="sf-delete" class="danger" hidden>Delete this search</button>
+    </form>
+
+    <div id="search-chips" class="chips"></div>
+
+    <div class="feed-tools">
+      <input id="feed-filter" placeholder="Filter feed…">
+      <button id="btn-clear-unseen" class="secondary" title="Mark all seen">✓ Seen</button>
+    </div>
+
+    <div id="feed-list" class="list"></div>
+    <div id="feed-empty" class="empty">Waiting for listings…<br><span class="muted">Add a search above to start monitoring.</span></div>
+  </section>
+
+  <!-- ── AUCTIONS ─────────────────────────────────────────── -->
+  <section id="tab-auctions" class="pane">
+    <div id="auction-upsell" class="upsell" hidden>
+      <strong>Auctions & snipe assist are a Pro feature.</strong>
+      <button id="btn-upgrade-auction" class="primary">Upgrade to Pro</button>
+    </div>
+    <div id="snipe-queue" class="snipe-queue" hidden>
+      <strong>Armed snipes</strong>
+      <div id="snipe-queue-list"></div>
+    </div>
+    <div id="auction-list" class="list"></div>
+    <div id="auction-empty" class="empty">Auction listings from your searches appear here with live countdowns.</div>
+  </section>
+
+  <!-- ── SAVED ────────────────────────────────────────────── -->
+  <section id="tab-saved" class="pane">
+    <div id="saved-list" class="list"></div>
+    <div id="saved-empty" class="empty">Save listings from the feed to keep them here.</div>
+    <button id="btn-clear-saved" class="danger" hidden>Clear all saved</button>
+  </section>
+
+  <!-- ── PORTFOLIO ────────────────────────────────────────── -->
+  <section id="tab-portfolio" class="pane">
+    <div id="pf-stats" class="pf-stats">
+      <div class="stat"><div class="v" id="pf-invested">$0</div><div class="l">Invested</div></div>
+      <div class="stat"><div class="v" id="pf-realized">$0</div><div class="l">Realized P/L</div></div>
+      <div class="stat"><div class="v" id="pf-open">0</div><div class="l">Open items</div></div>
+    </div>
+    <button id="btn-add-pf" class="secondary">+ Add purchase</button>
+    <form id="pf-form" hidden>
+      <input type="hidden" id="pf-id">
+      <div class="row"><input id="pf-title" placeholder="Item title" required></div>
+      <div class="row two">
+        <input id="pf-buy" type="number" step="0.01" min="0" placeholder="Buy price $">
+        <input id="pf-sold" type="number" step="0.01" min="0" placeholder="Sold price $ (blank if open)">
+      </div>
+      <div class="row two">
+        <input id="pf-fees" type="number" step="0.01" min="0" placeholder="Fees $">
+        <input id="pf-ship" type="number" step="0.01" min="0" placeholder="Shipping $">
+      </div>
+      <div class="row"><input id="pf-url" placeholder="Listing URL (optional)"></div>
+      <div class="row two">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="pf-cancel" class="secondary">Cancel</button>
+      </div>
+    </form>
+    <div id="pf-list" class="list"></div>
+    <div id="pf-empty" class="empty">Track buys and sells to see real profit after fees.</div>
+  </section>
+
+</main>
+
+<div id="toast" hidden></div>
+
+<template id="tpl-card">
+  <div class="card">
+    <img class="c-img" alt="">
+    <div class="c-body">
+      <span class="c-new" hidden>NEW</span>
+      <span class="c-score" hidden></span>
+      <div class="c-title"></div>
+      <div class="c-meta">
+        <span class="c-price"></span>
+        <span class="c-seller muted"></span>
+      </div>
+      <div class="c-sub muted"></div>
+      <div class="c-actions"></div>
+    </div>
+  </div>
+</template>
+
+<script type="module" src="panel.js"></script>
+</body>
+</html>
