@@ -11,6 +11,15 @@ Time: ~1–2 hours. Everything starts on free tiers.
 3. Free quota is 5,000 Browse API calls/day. Once the product works, apply for the
    **Application Growth Check** to raise it (free; they review that you comply with
    the API license).
+4. **Production keyset compliance:** eBay marks production keys "Non Compliant"
+   (and blocks them) until you register a Marketplace Account Deletion endpoint.
+   After deploying functions (step 2.4), go to Application Keys → Alerts &
+   Notifications → Marketplace Account Deletion and enter:
+   - endpoint: `https://<PROJECT_REF>.supabase.co/functions/v1/ebay-account-deletion`
+   - verification token: the value of `EBAY_VERIFICATION_TOKEN` (or the default
+     baked into `supabase/functions/ebay-account-deletion/index.ts`)
+   Click Save — eBay fires a challenge request the function must answer, then the
+   keyset flips to compliant. Use "Send Test Notification" to verify end-to-end.
 
 ## 2. Supabase project (~20 min)
 
@@ -39,7 +48,8 @@ Time: ~1–2 hours. Everything starts on free tiers.
    supabase functions deploy ebay-search
    supabase functions deploy deal-score
    supabase functions deploy stripe-checkout
-   supabase functions deploy stripe-webhook --no-verify-jwt   # Stripe signs instead
+   supabase functions deploy stripe-webhook --no-verify-jwt        # Stripe signs instead
+   supabase functions deploy ebay-account-deletion --no-verify-jwt # eBay challenge/notices
    ```
 5. In Authentication → Providers, enable **Email**. Decide on email confirmation
    (recommended ON for production to block throwaway trial farming).
