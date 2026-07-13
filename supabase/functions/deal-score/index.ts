@@ -53,7 +53,11 @@ Deno.serve(async (req) => {
     const params = new URLSearchParams({
       q: keywords, limit: "50", filter: filters.join(","),
     });
-    const token = await getEbayAppToken();
+    let token: string;
+    try { token = await getEbayAppToken(); } catch (e) {
+      console.error("ebay token error", e);
+      return json({ error: "ebay_auth_failed", detail: String((e as Error).message).slice(0, 300) }, 502);
+    }
     const res = await fetch(
       `${ebayApiBase()}/buy/browse/v1/item_summary/search?${params}`,
       { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" } },

@@ -87,7 +87,13 @@ Deno.serve(async (req) => {
     });
     if (categoryIds.length) params.set("category_ids", categoryIds.join(","));
 
-    const token = await getEbayAppToken();
+    // Token failures (bad credentials, keyset not yet compliant) must come back
+    // as clean JSON, not an unhandled throw — the extension needs the reason.
+    let token: string;
+    try { token = await getEbayAppToken(); } catch (e) {
+      console.error("ebay token error", e);
+      return json({ error: "ebay_auth_failed", detail: String((e as Error).message).slice(0, 300) }, 502);
+    }
     const res = await fetch(
       `${ebayApiBase()}/buy/browse/v1/item_summary/search?${params}`,
       {
