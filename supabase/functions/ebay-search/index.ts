@@ -42,7 +42,19 @@ Deno.serve(async (req) => {
 
   const buying = (body.buyingOptions?.length ? body.buyingOptions : ["FIXED_PRICE"])
     .filter((b: string) => ["FIXED_PRICE", "AUCTION", "BEST_OFFER"].includes(b));
-  const limit = Math.min(Number(body.limit) || 60, 60);
+  const limit = Math.min(Math.max(Math.trunc(Number(body.limit)) || 60, 1), 60);
+  // Coerce prices once; drop NaN/negatives so a bad value can't reach the
+  // filter expression as "price:[NaN..]" and 400 the upstream call.
+  const num = (v: unknown) =>
+    v == null || v === "" || !isFinite(Number(v)) || Number(v) < 0 ? null : Number(v);
+  const priceMin = num(body.priceMin);
+  const priceMax = num(body.priceMax);
+  // Category/condition ids are numeric — strip anything that could mangle the
+  // comma/brace-delimited filter string.
+  const idList = (v: unknown) =>
+    Array.isArray(v) ? v.map(String).filter((s) => /^\d+$/.test(s)) : [];
+  const categoryIds = idList(body.categoryIds);
+  const conditionIds = idList(body.conditionIds);
   const blocked = new Set(
     (body.blockedSellers ?? []).map((s: string) => s.toLowerCase()),
   );
@@ -54,30 +66,26 @@ Deno.serve(async (req) => {
     items = mockSearchItems(keywords, { auctions: buying.includes("AUCTION"), limit })
       .filter((it) =>
         !blocked.has((it.seller ?? "").toLowerCase()) &&
-        (body.priceMin == null || it.price == null || it.price >= Number(body.priceMin)) &&
-        (body.priceMax == null || it.price == null || it.price <= Number(body.priceMax)));
+        (priceMin == null || it.price == null || it.price >= priceMin) &&
+        (priceMax == null || it.price == null || it.price <= priceMax));
   } else {
     // ── Build Browse API request ──────────────────────────────────────────────
     const filters: string[] = [];
     filters.push(`buyingOptions:{${buying.join("|")}}`);
-    if (body.priceMin != null || body.priceMax != null) {
-      const lo = body.priceMin != null ? Number(body.priceMin) : "";
-      const hi = body.priceMax != null ? Number(body.priceMax) : "";
-      filters.push(`price:[${lo}..${hi}]`, "priceCurrency:USD");
+    if (priceMin != null || priceMax != null) {
+      filters.push(`price:[${priceMin ?? ""}..${priceMax ?? ""}]`, "priceCurrency:USD");
     }
     if (body.usOnly !== false) filters.push("itemLocationCountry:US");
-    if (body.conditionIds?.length) filters.push(`conditionIds:{${body.conditionIds.join("|")}}`);
+    if (conditionIds.length) filters.push(`conditionIds:{${conditionIds.join("|")}}`);
 
-    const sortMap: Record<string, string> = {
-      newlyListed: "newlyListed", endingSoonest: "endingSoonest", price: "price",
-    };
     const params = new URLSearchParams({
       q: keywords,
       limit: String(limit),
-      sort: sortMap[body.sort] ?? "newlyListed",
+      sort: ["newlyListed", "endingSoonest", "price"].includes(body.sort)
+        ? body.sort : "newlyListed",
       filter: filters.join(","),
     });
-    if (body.categoryIds?.length) params.set("category_ids", body.categoryIds.join(","));
+    if (categoryIds.length) params.set("category_ids", categoryIds.join(","));
 
     const token = await getEbayAppToken();
     const res = await fetch(
@@ -137,15 +145,16 @@ Deno.serve(async (req) => {
   let newItems: string[] | null = null;
   if (body.searchId) {
     const admin = adminClient();
-    // Verify the search belongs to the caller before touching its seen-set.
-    const { data: owned } = await admin
-      .from("saved_searches").select("id")
-      .eq("id", body.searchId).eq("user_id", auth.id).maybeSingle();
+    const ids = items.map((i: any) => i.itemId);
+    // Ownership check and seen lookup are independent — run them together and
+    // only act on the seen-set if the search belongs to the caller.
+    const [{ data: owned }, { data: seen }] = await Promise.all([
+      admin.from("saved_searches").select("id")
+        .eq("id", body.searchId).eq("user_id", auth.id).maybeSingle(),
+      admin.from("seen_items").select("item_id")
+        .eq("search_id", body.searchId).in("item_id", ids.length ? ids : ["-"]),
+    ]);
     if (owned) {
-      const ids = items.map((i: any) => i.itemId);
-      const { data: seen } = await admin
-        .from("seen_items").select("item_id")
-        .eq("search_id", body.searchId).in("item_id", ids.length ? ids : ["-"]);
       const seenSet = new Set((seen ?? []).map((r) => r.item_id));
       const isBaseline = seenSet.size === 0 &&
         (await admin.from("seen_items").select("item_id", { count: "exact", head: true })

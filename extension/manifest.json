@@ -5,8 +5,8 @@
   "version": "1.0.0",
   "description": "Real-time new-listing alerts, auction sniping assistant, deal scores, and a reseller portfolio. Subscription required.",
   "minimum_chrome_version": "114",
-  "permissions": ["storage", "alarms", "notifications", "sidePanel", "tabs"],
-  "host_permissions": ["https://*.supabase.co/*"],
+  "permissions": ["storage", "alarms", "notifications", "sidePanel"],
+  "host_permissions": ["https://kiynmpyqwjcpsurhgibl.supabase.co/*"],
   "background": { "service_worker": "background.js", "type": "module" },
   "side_panel": { "default_path": "panel/panel.html" },
   "action": {

@@ -84,7 +84,21 @@ async function pollSearch(searchId) {
   if (fresh.length) await notifyNewItems(search, fresh);
 }
 
-async function updateFeed(search, result) {
+// chrome.storage has no transactions: two polls finishing together interleave
+// their read-modify-writes of fw_feed / fw_unseen and drop each other's
+// updates. Chain every mutation through one promise so they run in turn.
+let storageChain = Promise.resolve();
+function withStorageLock(fn) {
+  const run = storageChain.then(fn);
+  storageChain = run.catch(() => {});
+  return run;
+}
+
+function updateFeed(search, result) {
+  return withStorageLock(() => updateFeedLocked(search, result));
+}
+
+async function updateFeedLocked(search, result) {
   const { fw_feed = [] } = await chrome.storage.local.get("fw_feed");
   const known = new Set(fw_feed.map((f) => f.itemId));
   const newSet = new Set(result.newItems ?? []);
@@ -105,11 +119,12 @@ async function updateFeed(search, result) {
 
 async function notifyNewItems(search, fresh) {
   if (!search.notify) return;
-  const { fw_unseen = 0, fw_settings = {} } = await chrome.storage.local.get([
-    "fw_unseen", "fw_settings",
-  ]);
-  const unseen = fw_unseen + fresh.length;
-  await chrome.storage.local.set({ fw_unseen: unseen });
+  const { unseen, fw_settings } = await withStorageLock(async () => {
+    const got = await chrome.storage.local.get(["fw_unseen", "fw_settings"]);
+    const next = (got.fw_unseen ?? 0) + fresh.length;
+    await chrome.storage.local.set({ fw_unseen: next });
+    return { unseen: next, fw_settings: got.fw_settings ?? {} };
+  });
   chrome.action.setBadgeText({ text: unseen > 99 ? "99+" : String(unseen) });
   chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
 
@@ -188,7 +203,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     switch (msg.type) {
       case "resync": await rescheduleAll(); sendResponse({ ok: true }); break;
       case "clear-unseen":
-        await chrome.storage.local.set({ fw_unseen: 0 });
+        await withStorageLock(() => chrome.storage.local.set({ fw_unseen: 0 }));
         chrome.action.setBadgeText({ text: "" });
         sendResponse({ ok: true });
         break;

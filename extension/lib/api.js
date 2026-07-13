@@ -53,14 +53,24 @@ export async function signOut() {
   await setSession(null);
 }
 
+// Refresh tokens are single-use — concurrent polls hitting an expired session
+// must share one refresh call instead of racing (the loser gets signed out).
+let refreshInFlight = null;
+
 async function freshAccessToken() {
   const s = await getSession();
   if (!s) throw new AuthError("signed_out");
   if (s.expires_at - 60 > Date.now() / 1000) return s.access_token;
+  refreshInFlight ??= refreshSession(s.refresh_token)
+    .finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function refreshSession(refreshToken) {
   const res = await fetch(`${AUTH_URL}/token?grant_type=refresh_token`, {
     method: "POST",
     headers: ANON_HEADERS,
-    body: JSON.stringify({ refresh_token: s.refresh_token }),
+    body: JSON.stringify({ refresh_token: refreshToken }),
   });
   if (!res.ok) { await setSession(null); throw new AuthError("session_expired"); }
   const j = await res.json();

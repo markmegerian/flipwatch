@@ -24,10 +24,11 @@ Deno.serve(async (req) => {
 
   let body;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
-  const price = PRICE_IDS[body.tier];
-  if (!price) return json({ error: "unknown_tier" }, 400);
+  const tier = body.tier === "standard" || body.tier === "pro" ? body.tier : null;
+  if (!tier) return json({ error: "unknown_tier" }, 400);
 
-  if (!Deno.env.get("STRIPE_SECRET_KEY")) {
+  const price = PRICE_IDS[tier];
+  if (!price || !Deno.env.get("STRIPE_SECRET_KEY")) {
     return json({ error: "billing_not_configured" }, 503);
   }
   const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!);
@@ -44,7 +45,7 @@ Deno.serve(async (req) => {
       customer: sub?.stripe_customer_id ?? undefined,
       customer_email: sub?.stripe_customer_id ? undefined : user.email,
       client_reference_id: user.id,
-      subscription_data: { metadata: { user_id: user.id, tier: body.tier } },
+      subscription_data: { metadata: { user_id: user.id, tier } },
       success_url: Deno.env.get("CHECKOUT_SUCCESS_URL") ??
         "https://example.com/thanks?upgraded=1",
       cancel_url: Deno.env.get("CHECKOUT_CANCEL_URL") ??
