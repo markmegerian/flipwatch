@@ -79,10 +79,15 @@ Deno.serve(async (req) => {
     }
     case "invoice.payment_failed": {
       const invoice = event.data.object as Stripe.Invoice;
-      if (invoice.subscription) {
+      // Like current_period_end above: invoice.subscription moved to
+      // invoice.parent.subscription_details.subscription in 2025-03+ payloads.
+      const subRef = (invoice as any).subscription ??
+        (invoice as any).parent?.subscription_details?.subscription;
+      const subId = typeof subRef === "string" ? subRef : subRef?.id;
+      if (subId) {
         await admin.from("subscriptions")
           .update({ status: "past_due", updated_at: new Date().toISOString() })
-          .eq("stripe_subscription_id", String(invoice.subscription));
+          .eq("stripe_subscription_id", subId);
       }
       break;
     }

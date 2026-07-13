@@ -42,11 +42,16 @@ Deno.serve(async (req) => {
     rawComps = mockSearchItems(keywords, { limit: 50 }).map((it) => it.price ?? NaN);
   } else {
     const filters = ["buyingOptions:{FIXED_PRICE}", "itemLocationCountry:US"];
-    if (body.conditionIds?.length) {
-      filters.push(`conditionIds:{${body.conditionIds.join("|")}}`);
+    const conditionIds = Array.isArray(body.conditionIds)
+      ? body.conditionIds.map(String).filter((s: string) => /^\d+$/.test(s)) : [];
+    if (conditionIds.length) {
+      filters.push(`conditionIds:{${conditionIds.join("|")}}`);
     }
+    // Default (best-match) sort: sorting by price would sample only the 50
+    // cheapest of possibly thousands of actives, dragging the median far below
+    // the real market and skewing every verdict toward "overpriced".
     const params = new URLSearchParams({
-      q: keywords, limit: "50", sort: "price", filter: filters.join(","),
+      q: keywords, limit: "50", filter: filters.join(","),
     });
     const token = await getEbayAppToken();
     const res = await fetch(

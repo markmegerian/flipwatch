@@ -211,7 +211,9 @@ function renderFeed() {
     !(i.buyingOptions ?? []).includes("AUCTION"),
   );
   $("feed-empty").style.display = items.length ? "none" : "block";
-  for (const item of items.slice(0, 100)) list.append(makeCard(item));
+  const frag = document.createDocumentFragment();
+  for (const item of items.slice(0, 100)) frag.append(makeCard(item));
+  list.append(frag);
 }
 
 function renderAuctions() {
@@ -234,7 +236,9 @@ function renderAuctions() {
     .filter((i) => (i.buyingOptions ?? []).includes("AUCTION") && i.endTime)
     .sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
   $("auction-empty").style.display = items.length ? "none" : "block";
-  for (const item of items.slice(0, 60)) list.append(makeCard(item, { auction: true }));
+  const frag = document.createDocumentFragment();
+  for (const item of items.slice(0, 60)) frag.append(makeCard(item, { auction: true }));
+  list.append(frag);
   tickCountdowns();
 }
 
@@ -512,8 +516,11 @@ $("sf-delete").addEventListener("click", async () => {
 $("search-filter").addEventListener("change", (e) => {
   state.searchFilter = e.target.value; renderFeed();
 });
+let filterTimer = null;
 $("feed-filter").addEventListener("input", (e) => {
-  state.feedFilter = e.target.value; renderFeed();
+  state.feedFilter = e.target.value;
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(renderFeed, 120); // don't rebuild 100 cards per keystroke
 });
 $("btn-clear-unseen").addEventListener("click", async () => {
   state.feed = state.feed.map((i) => ({ ...i, isNew: false }));
@@ -538,7 +545,12 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.fw_session) boot();
+  if (area !== "local" || !changes.fw_session) return;
+  // fw_session also changes on hourly token refreshes — only re-boot (which
+  // resets the whole UI) when the signed-in user actually changed.
+  const before = changes.fw_session.oldValue?.user?.id ?? null;
+  const after = changes.fw_session.newValue?.user?.id ?? null;
+  if (before !== after) boot();
 });
 
 boot();

@@ -41,6 +41,19 @@ export interface AuthedUser {
   };
 }
 
+// plan_limits only changes when pricing changes — cache the whole table (3
+// rows) per isolate so requireSubscriber costs two round trips, not three.
+type PlanLimitsRow = AuthedUser["limits"] & { tier: string };
+let planLimitsCache: { rows: PlanLimitsRow[]; expires: number } | null = null;
+
+async function getPlanLimits(admin: SupabaseClient): Promise<PlanLimitsRow[] | null> {
+  if (planLimitsCache && planLimitsCache.expires > Date.now()) return planLimitsCache.rows;
+  const { data } = await admin.from("plan_limits").select("*");
+  if (!data?.length) return planLimitsCache?.rows ?? null; // stale beats broken
+  planLimitsCache = { rows: data as PlanLimitsRow[], expires: Date.now() + 300_000 };
+  return planLimitsCache.rows;
+}
+
 /**
  * Validates the caller's JWT, loads their subscription + plan limits, and
  * rejects lapsed accounts. This is the paywall — every paid endpoint calls it.
@@ -69,8 +82,7 @@ export async function requireSubscriber(req: Request): Promise<AuthedUser | Resp
       new Date(sub.current_period_end) > now); // grace period until period end
   if (!trialValid && !paidValid) return json({ error: "subscription_expired" }, 402);
 
-  const { data: limits } = await admin
-    .from("plan_limits").select("*").eq("tier", sub.tier).single();
+  const limits = (await getPlanLimits(admin))?.find((l) => l.tier === sub.tier);
   if (!limits) return json({ error: "plan_misconfigured" }, 500);
 
   return { id: uid, email: userData.user.email, tier: sub.tier, status: sub.status, limits };
