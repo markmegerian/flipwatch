@@ -155,6 +155,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 @keyframes pulse { 50% { opacity: .45; } }
 
 /* Upsell / snipe queue */
+/* The hidden attribute must always win, even over display rules below
+   (e.g. .upsell's flex) — without this, Pro users saw the upgrade banner. */
+[hidden] { display: none !important; }
+
 .upsell {
   border: 1px solid var(--line); background: var(--bg2); border-radius: 12px;
   padding: 14px; text-align: center; margin-bottom: 12px;

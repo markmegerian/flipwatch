@@ -60,3 +60,6 @@ button { font: inherit; cursor: pointer; }
 .check input { width: auto; margin: 0; }
 footer { margin: 24px 0; text-align: center; }
 a { color: var(--accent); }
+
+/* Keep the hidden attribute authoritative over any display rules. */
+[hidden] { display: none !important; }
