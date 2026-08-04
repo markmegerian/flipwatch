@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Flipwatch</title>
+
+<!-- Home-screen app behaviour on iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Flipwatch">
+<meta name="theme-color" content="#2563eb">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<style>
+  :root {
+    --bg: #ffffff; --bg2: #f7f8fa; --line: #e7e9ee;
+    --text: #16181d; --muted: #8a8f98;
+    --accent: #2563eb; --accent-soft: #eff4ff;
+    --green: #16a34a; --red: #dc2626; --amber: #d97706;
+    --tabbar: rgba(255,255,255,.92);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --bg2: #171a20; --line: #262a33;
+      --text: #e8eaee; --muted: #7d8390;
+      --accent: #3b82f6; --accent-soft: #17233c;
+      --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+      --tabbar: rgba(16,18,22,.92);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior-y: contain; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+  button { font: inherit; cursor: pointer; color: inherit; }
+  input, select {
+    font: 16px/1.4 inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px; width: 100%;
+  }
+  .muted { color: var(--muted); }
+
+  header {
+    position: sticky; top: 0; z-index: 20; background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .bolt { width: 26px; height: 26px; border-radius: 7px; background: var(--accent);
+          display: flex; align-items: center; justify-content: center; flex: none; }
+  .bolt svg { width: 15px; height: 15px; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; flex: 1; }
+  .chip {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    background: var(--accent-soft); color: var(--accent); padding: 4px 8px; border-radius: 999px;
+  }
+  .iconbtn {
+    background: none; border: none; padding: 8px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .iconbtn:active { background: var(--bg2); }
+  .iconbtn svg { width: 20px; height: 20px; }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+  main { padding: 12px 16px 24px; }
+  .pane { display: none; }
+  .pane.on { display: block; }
+
+  .row { display: flex; gap: 8px; align-items: center; }
+  .scroller { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+  .scroller::-webkit-scrollbar { display: none; }
+  .schip {
+    flex: none; border: 1px solid var(--line); background: var(--bg2);
+    border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 550; white-space: nowrap;
+  }
+  .schip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .card {
+    display: flex; gap: 11px; border: 1px solid var(--line); border-radius: 14px;
+    padding: 11px; background: var(--bg); margin-bottom: 10px;
+  }
+  .card img {
+    width: 74px; height: 74px; object-fit: cover; border-radius: 10px;
+    flex: none; background: var(--bg2);
+  }
+  .cbody { min-width: 0; flex: 1; }
+  .badge {
+    display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .07em;
+    background: var(--amber); color: #fff; padding: 2px 6px; border-radius: 5px; margin-bottom: 4px;
+  }
+  .ctitle {
+    font-size: 14px; font-weight: 600; line-height: 1.3; margin-bottom: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .cmeta { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 13px; }
+  .price { color: var(--accent); font-weight: 700; }
+  .cd { color: var(--red); font-weight: 650; font-variant-numeric: tabular-nums; font-size: 12px; }
+  .csub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .cacts { display: flex; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
+  .cacts a, .cacts button {
+    border: 1px solid var(--line); background: var(--bg2); border-radius: 9px;
+    padding: 8px 12px; font-size: 13px; font-weight: 550; text-decoration: none; color: inherit;
+  }
+  .cacts .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .cacts .on { background: var(--green); border-color: var(--green); color: #fff; }
+  .score { display: inline-block; font-size: 11px; font-weight: 650; margin-top: 6px;
+           padding: 3px 7px; border-radius: 6px; background: var(--bg2); }
+  .score.good { background: var(--green); color: #fff; }
+  .score.bad  { background: var(--red); color: #fff; }
+
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; font-size: 14px; }
+  .stats { display: flex; gap: 8px; margin-bottom: 14px; }
+  .stat { flex: 1; border: 1px solid var(--line); border-radius: 12px; padding: 11px; text-align: center; }
+  .stat .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .v.pos { color: var(--green); } .stat .v.neg { color: var(--red); }
+  .stat .l { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+  nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    display: flex; background: var(--tabbar); backdrop-filter: saturate(180%) blur(16px);
+    border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; background: none; border: none; padding: 9px 0 7px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 10px; font-weight: 600; color: var(--muted);
+  }
+  nav button.on { color: var(--accent); }
+  nav svg { width: 21px; height: 21px; }
+
+  /* Sign-in */
+  #gate { padding: 8vh 24px; max-width: 400px; margin: 0 auto; }
+  #gate .bolt { width: 46px; height: 46px; border-radius: 13px; margin-bottom: 18px; }
+  #gate .bolt svg { width: 26px; height: 26px; }
+  #gate h2 { font-size: 25px; margin: 0 0 6px; letter-spacing: -.02em; }
+  #gate p { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+  #gate form { display: flex; flex-direction: column; gap: 11px; }
+  #gate button[type=submit] {
+    background: var(--accent); color: #fff; border: none; border-radius: 11px;
+    padding: 14px; font-size: 16px; font-weight: 650;
+  }
+  #gate button[type=submit]:disabled { opacity: .6; }
+  #err { color: var(--red); font-size: 13.5px; }
+
+  #toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 40;
+    background: var(--text); color: var(--bg); padding: 10px 16px;
+    border-radius: 999px; font-size: 13.5px; font-weight: 550; max-width: 88vw;
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<section id="gate" hidden>
+  <div class="bolt"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#fff"/></svg></div>
+  <h2>Flipwatch</h2>
+  <p>Sign in with your Flipwatch account to see your searches and feed.</p>
+  <form id="signin">
+    <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="pass" type="password" placeholder="Password" autocomplete="current-password" required>
+    <div id="err" hidden></div>
+    <button type="submit">Sign in</button>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header>
+    <div class="bolt"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#fff"/></svg></div>
+    <h1>Flipwatch</h1>
+    <span id="plan" class="chip" hidden></span>
+    <button id="refresh" class="iconbtn" aria-label="Refresh listings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/>
+      </svg>
+    </button>
+    <button id="signout" class="iconbtn" aria-label="Sign out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+      </svg>
+    </button>
+  </header>
+
+  <main>
+    <section id="tab-feed" class="pane on">
+      <div id="chips" class="scroller"></div>
+      <div id="feed"></div>
+      <div id="feed-empty" class="empty">Pull the refresh button to load listings from your saved searches.</div>
+    </section>
+
+    <section id="tab-auctions" class="pane">
+      <div id="auctions"></div>
+      <div id="auctions-empty" class="empty">Auction listings from your searches appear here with live countdowns.</div>
+    </section>
+
+    <section id="tab-saved" class="pane">
+      <div id="saved"></div>
+      <div id="saved-empty" class="empty">Listings you save appear here, synced with the extension.</div>
+    </section>
+
+    <section id="tab-portfolio" class="pane">
+      <div class="stats">
+        <div class="stat"><div class="v" id="pf-inv">$0</div><div class="l">Invested</div></div>
+        <div class="stat"><div class="v" id="pf-pl">$0</div><div class="l">Realized</div></div>
+        <div class="stat"><div class="v" id="pf-open">0</div><div class="l">Open</div></div>
+      </div>
+      <div id="pf"></div>
+      <div id="pf-empty" class="empty">Purchases you track in the extension show up here.</div>
+    </section>
+  </main>
+
+  <nav>
+    <button class="tab on" data-tab="feed">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Feed
+    </button>
+    <button class="tab" data-tab="auctions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>Auctions
+    </button>
+    <button class="tab" data-tab="saved">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z"/></svg>Saved
+    </button>
+    <button class="tab" data-tab="portfolio">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17l6-6 4 4 7-7M21 8V4h-4"/></svg>Portfolio
+    </button>
+  </nav>
+</div>
+
+<div id="toast" hidden></div>
+
+<script>
+// ── Config (anon key is public by design — RLS + the edge-function paywall gate access) ──
+const SUPABASE_URL = "https://kiynmpyqwjcpsurhgibl.supabase.co";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpeW5tcHlxd2pjcHN1cmhnaWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MDI1NTUsImV4cCI6MjA5OTQ3ODU1NX0._l35WagMXknzfp84CzAnmwqnnPzJI-gRN_iT3RbQLQ8";
+const AUTH = SUPABASE_URL + "/auth/v1", REST = SUPABASE_URL + "/rest/v1", FN = SUPABASE_URL + "/functions/v1";
+const H = { "Content-Type": "application/json", apikey: ANON };
+
+const $ = (id) => document.getElementById(id);
+const state = { session: null, sub: null, limits: [], searches: [], feed: [], saved: [],
+                savedBy: new Map(), portfolio: [], filter: "" };
+
+// ── Session ───────────────────────────────────────────────────────────────────
+const SKEY = "fw_session";
+function loadSession() {
+  try { return JSON.parse(localStorage.getItem(SKEY)); } catch { return null; }
+}
+function saveSession(j) {
+  if (!j) return localStorage.removeItem(SKEY);
+  localStorage.setItem(SKEY, JSON.stringify({
+    access_token: j.access_token, refresh_token: j.refresh_token,
+    expires_at: j.expires_at ?? Math.floor(Date.now() / 1000) + (j.expires_in ?? 3600),
+    user: { id: j.user?.id, email: j.user?.email },
+  }));
+}
+
+let refreshing = null; // single-flight: refresh tokens are one-time use
+async function token() {
+  const s = state.session;
+  if (!s) throw new Error("signed_out");
+  if (s.expires_at - 60 > Date.now() / 1000) return s.access_token;
+  refreshing ??= (async () => {
+    const r = await fetch(`${AUTH}/token?grant_type=refresh_token`, {
+      method: "POST", headers: H, body: JSON.stringify({ refresh_token: s.refresh_token }),
+    });
+    if (!r.ok) { saveSession(null); state.session = null; throw new Error("session_expired"); }
+    const j = await r.json();
+    saveSession(j); state.session = loadSession();
+    return j.access_token;
+  })().finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+async function api(url, opts = {}) {
+  const t = await token();
+  const res = await fetch(url, {
+    ...opts, headers: { ...H, ...opts.headers, Authorization: `Bearer ${t}` },
+  });
+  if (res.status === 401) { signOut(); throw new Error("Signed out — please sign in again."); }
+  return res;
+}
+async function rest(path, opts) {
+  const r = await api(REST + path, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.status === 204 ? null : r.json();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const money = (v) => v == null ? "—"
+  : Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
+function ago(ts) {
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  return s < 60 ? `${s | 0}s ago` : s < 3600 ? `${s / 60 | 0}m ago`
+       : s < 86400 ? `${s / 3600 | 0}h ago` : `${s / 86400 | 0}d ago`;
+}
+function countdown(end) {
+  const ms = new Date(end).getTime() - Date.now();
+  if (ms <= 0) return "ended";
+  const s = ms / 1000 | 0, d = s / 86400 | 0, h = (s % 86400) / 3600 | 0,
+        m = (s % 3600) / 60 | 0, sec = s % 60;
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m ${sec}s`;
+}
+let toastT;
+function toast(msg) {
+  const el = $("toast");
+  el.textContent = msg; el.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2400);
+}
+function allows(feature) {
+  const l = state.limits.find((x) => x.tier === state.sub?.tier);
+  return l ? !!l[feature] : false;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+async function boot() {
+  state.session = loadSession();
+  if (!state.session) return showGate();
+  $("gate").hidden = true; $("app").hidden = false;
+
+  try {
+    const [subs, limits] = await Promise.all([
+      rest("/subscriptions?select=tier,status,trial_ends_at,current_period_end"),
+      rest("/plan_limits?select=*"),
+    ]);
+    state.sub = subs?.[0] ?? null; state.limits = limits ?? [];
+    if (state.sub) {
+      $("plan").hidden = false;
+      $("plan").textContent = state.sub.status === "canceled" ? "expired" : state.sub.tier;
+    }
+  } catch (e) { if (!state.session) return; console.warn(e); }
+
+  restoreFeed();
+  await Promise.all([loadSearches(), loadSaved()]);
+  renderAll();
+  if (!state.feed.length) refreshFeed();
+}
+
+function showGate() { $("gate").hidden = false; $("app").hidden = true; }
+function signOut() {
+  saveSession(null); state.session = null;
+  localStorage.removeItem("fw_feed_cache");
+  showGate();
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+async function loadSearches() {
+  try { state.searches = await rest("/saved_searches?select=*&order=created_at.asc"); }
+  catch { state.searches = []; }
+}
+async function loadSaved() {
+  try {
+    state.saved = await rest("/saved_listings?select=*&order=saved_at.desc");
+    state.savedBy = new Map(state.saved.map((s) => [s.item_id, s]));
+  } catch { state.saved = []; }
+}
+async function loadPortfolio() {
+  try { state.portfolio = await rest("/portfolio_entries?select=*&order=bought_at.desc"); }
+  catch { state.portfolio = []; }
+}
+
+function restoreFeed() {
+  try {
+    const c = JSON.parse(localStorage.getItem("fw_feed_cache"));
+    if (Array.isArray(c)) state.feed = c;
+  } catch {}
+}
+function cacheFeed() {
+  try { localStorage.setItem("fw_feed_cache", JSON.stringify(state.feed.slice(0, 120))); }
+  catch {}
+}
+
+let busy = false;
+async function refreshFeed() {
+  if (busy) return;
+  const active = state.searches.filter((s) => s.active);
+  if (!active.length) { toast("No active saved searches yet"); return; }
+  busy = true;
+  $("refresh").querySelector("svg").classList.add("spin");
+
+  const known = new Map(state.feed.map((f) => [f.itemId, f]));
+  let added = 0, failed = 0, lapsed = false, quota = false;
+  for (const s of active) {
+    try {
+      const r = await api(`${FN}/ebay-search`, {
+        method: "POST",
+        body: JSON.stringify({
+          searchId: s.id, keywords: s.keywords,
+          priceMin: s.price_min, priceMax: s.price_max,
+          buyingOptions: s.buying_options, usOnly: s.us_only,
+          categoryIds: s.category_ids ?? undefined,
+          conditionIds: s.condition_ids ?? undefined,
+          blockedSellers: s.blocked_sellers,
+          sort: (s.buying_options ?? []).includes("AUCTION") ? "endingSoonest" : "newlyListed",
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        if (j.error === "plan_upgrade_required") continue; // e.g. auctions on Standard
+        if (r.status === 402) { lapsed = true; break; }
+        if (j.error === "daily_quota_exceeded") { quota = true; break; }
+        throw new Error(j.error ?? `error ${r.status}`);
+      }
+      const fresh = new Set(j.newItems ?? []);
+      for (const it of j.items ?? []) {
+        if (known.has(it.itemId)) continue;
+        const row = { ...it, searchId: s.id, searchLabel: s.label,
+                      isNew: fresh.has(it.itemId), fetchedAt: Date.now() };
+        known.set(it.itemId, row); state.feed.unshift(row); added++;
+      }
+    } catch (e) { failed++; console.warn(s.label, e); }
+  }
+
+  state.feed = state.feed.slice(0, 200);
+  cacheFeed(); renderAll();
+  busy = false;
+  $("refresh").querySelector("svg").classList.remove("spin");
+  toast(lapsed ? "Subscription expired — renew to keep monitoring"
+        : quota ? "Daily search limit reached — resets at midnight"
+        : failed && !added ? "Couldn't reach eBay — try again"
+        : added ? `${added} new listing${added > 1 ? "s" : ""}` : "No new listings");
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll() { renderChips(); renderFeed(); renderAuctions(); renderSaved(); }
+
+function renderChips() {
+  const wrap = $("chips");
+  wrap.textContent = "";
+  const mk = (label, val) => {
+    const b = document.createElement("button");
+    b.className = "schip" + (state.filter === val ? " on" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => { state.filter = val; renderChips(); renderFeed(); });
+    wrap.append(b);
+  };
+  mk("All", "");
+  for (const s of state.searches) mk(s.label, s.id);
+}
+
+function card(item, opts = {}) {
+  const el = document.createElement("div");
+  el.className = "card";
+
+  if (item.image) {
+    const img = document.createElement("img");
+    img.src = item.image; img.alt = ""; img.loading = "lazy";
+    el.append(img);
+  }
+  const body = document.createElement("div");
+  body.className = "cbody";
+  el.append(body);
+
+  if (item.isNew) {
+    const b = document.createElement("span");
+    b.className = "badge"; b.textContent = "NEW";
+    body.append(b);
+  }
+  const t = document.createElement("div");
+  t.className = "ctitle"; t.textContent = item.title ?? "(untitled)";
+  body.append(t);
+
+  const meta = document.createElement("div");
+  meta.className = "cmeta";
+  const p = document.createElement("span");
+  p.className = "price";
+  p.textContent = item.currentBid != null ? `${money(item.currentBid)} bid` : money(item.price);
+  meta.append(p);
+  if (item.seller) {
+    const s = document.createElement("span");
+    s.className = "muted"; s.style.fontSize = "12px"; s.textContent = item.seller;
+    meta.append(s);
+  }
+  if (opts.auction && item.endTime) {
+    const cd = document.createElement("span");
+    cd.className = "cd"; cd.dataset.end = item.endTime; cd.textContent = "⏱ " + countdown(item.endTime);
+    meta.append(cd);
+  }
+  body.append(meta);
+
+  const sub = document.createElement("div");
+  sub.className = "csub";
+  sub.textContent = opts.sub ?? [item.searchLabel, item.fetchedAt ? ago(item.fetchedAt) : null]
+    .filter(Boolean).join(" · ");
+  body.append(sub);
+
+  const acts = document.createElement("div");
+  acts.className = "cacts";
+  const open = document.createElement("a");
+  open.className = "primary"; open.textContent = "Open";
+  open.href = item.url ?? "#"; open.target = "_blank"; open.rel = "noopener";
+  acts.append(open);
+
+  if (!opts.noSave) {
+    const sv = document.createElement("button");
+    const on = state.savedBy.has(item.itemId);
+    sv.className = on ? "on" : ""; sv.textContent = on ? "✓ Saved" : "Save";
+    sv.addEventListener("click", () => toggleSave(item, sv));
+    acts.append(sv);
+  }
+  if (!opts.noScore && allows("deal_score_enabled") && (item.price ?? item.currentBid)) {
+    const sc = document.createElement("button");
+    sc.textContent = "Score";
+    sc.addEventListener("click", () => score(item, body, sc));
+    acts.append(sc);
+  }
+  body.append(acts);
+  return el;
+}
+
+function renderFeed() {
+  const list = $("feed");
+  list.textContent = "";
+  const items = state.feed.filter((i) =>
+    (!state.filter || i.searchId === state.filter) &&
+    !(i.buyingOptions ?? []).includes("AUCTION"));
+  $("feed-empty").hidden = items.length > 0;
+  const frag = document.createDocumentFragment();
+  for (const i of items.slice(0, 80)) frag.append(card(i));
+  list.append(frag);
+}
+
+function renderAuctions() {
+  const list = $("auctions");
+  list.textContent = "";
+  const items = state.feed
+    .filter((i) => (i.buyingOptions ?? []).includes("AUCTION") && i.endTime)
+    .sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
+  $("auctions-empty").hidden = items.length > 0;
+  const frag = document.createDocumentFragment();
+  for (const i of items.slice(0, 60)) frag.append(card(i, { auction: true }));
+  list.append(frag);
+}
+
+function renderSaved() {
+  const list = $("saved");
+  list.textContent = "";
+  $("saved-empty").hidden = state.saved.length > 0;
+  const frag = document.createDocumentFragment();
+  for (const s of state.saved) {
+    frag.append(card(
+      { itemId: s.item_id, title: s.title, price: s.price, image: s.image_url,
+        url: s.item_url, seller: s.seller },
+      { sub: `saved ${ago(new Date(s.saved_at).getTime())}` },
+    ));
+  }
+  list.append(frag);
+}
+
+function renderPortfolio() {
+  const list = $("pf");
+  list.textContent = "";
+  $("pf-empty").hidden = state.portfolio.length > 0;
+  let invested = 0, realized = 0, open = 0;
+  for (const e of state.portfolio) {
+    const cost = (+e.buy_price || 0) + (+e.fees || 0) + (+e.shipping || 0);
+    if (e.sold_price != null) realized += +e.sold_price - cost;
+    else { invested += cost; open++; }
+  }
+  $("pf-inv").textContent = money(invested);
+  const pl = $("pf-pl");
+  pl.textContent = (realized > 0 ? "+" : realized < 0 ? "−" : "") + money(Math.abs(realized));
+  pl.className = "v " + (realized > 0 ? "pos" : realized < 0 ? "neg" : "");
+  $("pf-open").textContent = String(open);
+
+  const frag = document.createDocumentFragment();
+  for (const e of state.portfolio) {
+    const cost = (+e.buy_price || 0) + (+e.fees || 0) + (+e.shipping || 0);
+    const pnl = e.sold_price != null ? +e.sold_price - cost : null;
+    frag.append(card(
+      { itemId: e.item_id, title: e.title, price: e.buy_price, image: e.image_url, url: e.item_url },
+      { noSave: true, noScore: true,
+        sub: pnl == null ? `open · cost ${money(cost)}`
+             : `sold ${money(e.sold_price)} · ${pnl >= 0 ? "+" : "−"}${money(Math.abs(pnl))}` },
+    ));
+  }
+  list.append(frag);
+}
+
+// Live countdowns
+setInterval(() => {
+  for (const el of document.querySelectorAll(".cd")) {
+    const t = countdown(el.dataset.end);
+    el.textContent = t === "ended" ? "ended" : "⏱ " + t;
+  }
+}, 1000);
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+async function toggleSave(item, btn) {
+  try {
+    const existing = state.savedBy.get(item.itemId);
+    if (existing) {
+      await rest(`/saved_listings?id=eq.${existing.id}`, { method: "DELETE" });
+      toast("Removed");
+    } else {
+      await rest("/saved_listings?on_conflict=user_id,item_id", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify({
+          item_id: item.itemId, title: item.title, price: item.price,
+          image_url: item.image, item_url: item.url, seller: item.seller,
+        }),
+      });
+      toast("Saved");
+    }
+    await loadSaved();
+    const on = state.savedBy.has(item.itemId);
+    btn.className = on ? "on" : ""; btn.textContent = on ? "✓ Saved" : "Save";
+    renderSaved();
+  } catch (e) { toast("Couldn't save — try again"); }
+}
+
+async function score(item, body, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await api(`${FN}/deal-score`, {
+      method: "POST",
+      body: JSON.stringify({
+        keywords: (item.title ?? "").slice(0, 80),
+        price: item.currentBid ?? item.price,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error ?? "failed");
+    const el = document.createElement("div");
+    el.className = "score " + (j.score == null ? ""
+      : ["steal", "great"].includes(j.verdict) ? "good"
+      : j.verdict === "fair" ? "" : "bad");
+    el.textContent = j.score == null ? "no comps"
+      : `${j.verdict.replace("_", " ")} · median ${money(j.median)}`;
+    body.insertBefore(el, body.querySelector(".cacts"));
+    btn.remove();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "Score";
+    toast(String(e.message) === "plan_upgrade_required" ? "Deal scores need Pro" : "Score unavailable");
+  }
+}
+
+// ── Wiring ────────────────────────────────────────────────────────────────────
+$("signin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = e.target.querySelector("button"), err = $("err");
+  btn.disabled = true; err.hidden = true;
+  try {
+    const r = await fetch(`${AUTH}/token?grant_type=password`, {
+      method: "POST", headers: H,
+      body: JSON.stringify({ email: $("email").value.trim(), password: $("pass").value }),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.access_token) throw new Error(j.msg || j.error_description || "Sign-in failed");
+    saveSession(j); state.session = loadSession();
+    $("pass").value = "";
+    await boot();
+  } catch (ex) {
+    err.hidden = false; err.textContent = ex.message;
+  } finally { btn.disabled = false; }
+});
+
+$("refresh").addEventListener("click", refreshFeed);
+$("signout").addEventListener("click", signOut);
+
+for (const t of document.querySelectorAll(".tab")) {
+  t.addEventListener("click", async () => {
+    for (const x of document.querySelectorAll(".tab")) x.classList.toggle("on", x === t);
+    for (const p of document.querySelectorAll(".pane"))
+      p.classList.toggle("on", p.id === `tab-${t.dataset.tab}`);
+    window.scrollTo(0, 0);
+    if (t.dataset.tab === "portfolio") { await loadPortfolio(); renderPortfolio(); }
+    if (t.dataset.tab === "saved") { await loadSaved(); renderSaved(); }
+  });
+}
+
+// Refresh when the app returns to the foreground after a while.
+let hidAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { hidAt = Date.now(); return; }
+  if (state.session && hidAt && Date.now() - hidAt > 120000) refreshFeed();
+});
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flipwatch — Account & Settings</title>
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>Flipwatch</h1>
+  <p class="muted">Account, subscription, and notification settings.</p>
+
+  <!-- Signed out -->
+  <section id="auth-card" class="card" hidden>
+    <h2 id="auth-title">Sign in</h2>
+    <form id="auth-form">
+      <input id="auth-email" type="email" placeholder="Email" required autocomplete="email">
+      <input id="auth-pass" type="password" placeholder="Password (8+ characters)" required minlength="8" autocomplete="current-password">
+      <button type="submit" class="primary" id="auth-submit">Sign in</button>
+    </form>
+    <p class="muted small">
+      <a href="#" id="auth-toggle">New here? Create an account — 7-day free trial, no card required.</a>
+    </p>
+    <div id="auth-error" class="error" hidden></div>
+  </section>
+
+  <!-- Signed in -->
+  <section id="account-card" class="card" hidden>
+    <h2>Account</h2>
+    <div class="kv"><span>Email</span><strong id="acct-email"></strong></div>
+    <div class="kv"><span>Plan</span><strong id="acct-plan"></strong></div>
+    <div class="kv"><span>Status</span><strong id="acct-status"></strong></div>
+    <div class="kv" id="acct-renew-row" hidden><span id="acct-renew-label">Renews</span><strong id="acct-renew"></strong></div>
+    <button id="btn-signout" class="secondary">Sign out</button>
+  </section>
+
+  <section id="billing-card" class="card" hidden>
+    <h2>Subscription</h2>
+    <div class="plans">
+      <div class="plan">
+        <h3>Standard</h3>
+        <div class="price">$14.99<span>/mo</span></div>
+        <ul>
+          <li>10 saved searches</li>
+          <li>30-second refresh</li>
+          <li>Instant desktop alerts</li>
+          <li>Saved listings & portfolio</li>
+        </ul>
+        <button class="primary" data-tier="standard">Choose Standard</button>
+      </div>
+      <div class="plan featured">
+        <h3>Pro</h3>
+        <div class="price">$29.99<span>/mo</span></div>
+        <ul>
+          <li>50 saved searches</li>
+          <li>15-second refresh</li>
+          <li>Auctions + snipe assist</li>
+          <li>Deal scores vs. market comps</li>
+        </ul>
+        <button class="primary" data-tier="pro">Choose Pro</button>
+      </div>
+    </div>
+    <p class="muted small">Billing is handled by Stripe. Cancel any time; your data is kept.</p>
+  </section>
+
+  <section id="notif-card" class="card" hidden>
+    <h2>Notifications</h2>
+    <label class="check"><input type="checkbox" id="opt-desktop" checked>
+      Desktop notifications for new listings</label>
+    <label class="check"><input type="checkbox" id="opt-sound">
+      Alert sound (plays in the side panel)</label>
+  </section>
+
+  <footer class="muted small">
+    Flipwatch uses eBay's official Browse API and never touches your eBay login.
+    Snipe assist opens the listing for you to bid yourself — it never bids automatically.
+  </footer>
+</div>
+<script type="module" src="options.js"></script>
+</body>
+</html>
