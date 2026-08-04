@@ -587,6 +587,11 @@ function renderAll() { renderChips(); renderFeed(); renderAuctions(); renderSave
 function renderChips() {
   const wrap = $("chips");
   wrap.textContent = "";
+  // Never leave the feed filtered by a search that no longer exists — it
+  // would silently render empty with no chip highlighted to explain why.
+  if (state.filter && !state.searches.some((s) => s.id === state.filter)) {
+    state.filter = "";
+  }
   const mk = (label, val) => {
     const b = document.createElement("button");
     b.className = "schip" + (state.filter === val ? " on" : "");
@@ -723,11 +728,16 @@ async function submitForm(ev) {
   }
   const body = readForm();
   try {
-    if (id) await rest(`/saved_searches?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(body) });
-    else await rest("/saved_searches", { method: "POST", body: JSON.stringify(body) });
+    if (id) {
+      await rest(`/saved_searches?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(body) });
+    } else {
+      await rest("/saved_searches", { method: "POST", body: JSON.stringify(body) });
+      state.filter = ""; // show everything, so the new search isn't hidden
+    }
     $("sform").hidden = true;
     await loadSearches();
     renderChips();
+    renderFeed();
     toast(id ? "Search updated" : "Search created");
     refreshFeed();
   } catch (e) { toast("Couldn't save — check your words and try again"); }
