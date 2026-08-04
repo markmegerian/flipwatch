@@ -5,6 +5,7 @@
 //   3. Snipe assist: at T-minus lead time, open the listing and alert the user
 //      to place their bid. (No automated bidding — see docs/COMPLIANCE.md.)
 import { AuthError, PlanError, db, getSession, searchEbay } from "./lib/api.js";
+import { applyExclusions, ebayQuery } from "./lib/query.js";
 
 const FEED_MAX = 200; // items kept in the local feed cache
 
@@ -50,7 +51,7 @@ async function pollSearch(searchId) {
   try {
     result = await searchEbay({
       searchId: search.id,
-      keywords: search.keywords,
+      keywords: ebayQuery(search.keywords), // "-word" exclusions aren't eBay syntax
       priceMin: search.price_min,
       priceMax: search.price_max,
       buyingOptions: search.buying_options,
@@ -76,9 +77,19 @@ async function pollSearch(searchId) {
     return;
   }
 
+  // eBay has no NOT operator, so excluded words are filtered here — before the
+  // feed and before alerts, so a blocked word never reaches a notification.
+  const kept = applyExclusions(search.keywords, result.items ?? []);
+  const keptIds = new Set(kept.map((i) => i.itemId));
+  result = {
+    ...result,
+    items: kept,
+    newItems: (result.newItems ?? []).filter((id) => keptIds.has(id)),
+  };
+
   await updateFeed(search, result);
 
-  const fresh = (result.newItems ?? [])
+  const fresh = result.newItems
     .map((id) => result.items.find((i) => i.itemId === id))
     .filter(Boolean);
   if (fresh.length) await notifyNewItems(search, fresh);

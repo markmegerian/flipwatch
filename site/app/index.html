@@ -149,6 +149,55 @@
   #gate button[type=submit]:disabled { opacity: .6; }
   #err { color: var(--red); font-size: 13.5px; }
 
+  /* Search editor */
+  .addbtn {
+    width: 100%; margin-bottom: 12px; padding: 12px; border-radius: 11px;
+    border: 1px dashed var(--line); background: var(--bg2);
+    font-size: 14px; font-weight: 600; color: var(--muted);
+  }
+  #sform {
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; margin-bottom: 14px; background: var(--bg2);
+  }
+  .fl { display: block; font-size: 13px; font-weight: 650; margin: 14px 0 5px; }
+  .fl:first-of-type { margin-top: 0; }
+  .fl .opt { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .hint { margin: 5px 0 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .hint b { color: var(--text); font-weight: 650; }
+  .two { display: flex; gap: 8px; margin-top: 8px; }
+  .two > * { flex: 1; }
+  .checks { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; }
+  .checks.spaced { margin: 16px 0 4px; }
+  .checks label { display: flex; align-items: center; gap: 6px; }
+  .checks input { width: auto; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button {
+    flex: 1; border: none; border-right: 1px solid var(--line); background: var(--bg);
+    padding: 11px 4px; font-size: 13px; font-weight: 550; color: var(--muted);
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  #sform button.go {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 650;
+  }
+  #sform button.ghost {
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 550;
+  }
+  #sform button.danger {
+    background: var(--bg); border: 1px solid var(--red); color: var(--red);
+    border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 550;
+  }
+  #sform button.wide { width: 100%; margin-top: 8px; }
+  .preview {
+    margin-top: 14px; padding: 11px; border-radius: 10px;
+    background: var(--bg); border: 1px solid var(--line); font-size: 12.5px; line-height: 1.5;
+  }
+  .preview .pv-head { font-weight: 650; margin-bottom: 4px; }
+  .preview .pv-item { color: var(--muted); }
+  .preview.bad { border-color: var(--red); color: var(--red); }
+
   #toast {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 40;
@@ -192,6 +241,64 @@
   <main>
     <section id="tab-feed" class="pane on">
       <div id="chips" class="scroller"></div>
+
+      <button id="btn-add" class="addbtn">+ New search</button>
+
+      <form id="sform" hidden>
+        <input type="hidden" id="sf-id">
+
+        <label class="fl" for="sf-keywords">What are you looking for?</label>
+        <input id="sf-keywords" placeholder="vintage pokemon holo" required>
+        <p class="hint">Words that must appear in every listing.</p>
+
+        <label class="fl" for="sf-any">Any of these <span class="opt">optional</span></label>
+        <input id="sf-any" placeholder="base set, fossil, jungle, neo">
+        <p class="hint">Comma-separated. Matches if a listing has <b>any one</b>.</p>
+
+        <label class="fl" for="sf-not">None of these <span class="opt">optional</span></label>
+        <input id="sf-not" placeholder="damaged, reprint, proxy">
+        <p class="hint">Hides listings containing these words.</p>
+
+        <label class="fl">Price</label>
+        <div class="two">
+          <input id="sf-min" type="number" min="0" step="0.01" placeholder="No minimum">
+          <input id="sf-max" type="number" min="0" step="0.01" placeholder="No maximum">
+        </div>
+
+        <label class="fl">Listing type</label>
+        <div class="seg" id="sf-type">
+          <button type="button" data-v="FIXED_PRICE">Buy It Now</button>
+          <button type="button" data-v="AUCTION">Auctions</button>
+          <button type="button" data-v="FIXED_PRICE,AUCTION">Both</button>
+        </div>
+
+        <label class="fl">Condition <span class="opt">optional</span></label>
+        <div class="checks" id="sf-cond">
+          <label><input type="checkbox" value="1000"> New</label>
+          <label><input type="checkbox" value="1500"> Open box</label>
+          <label><input type="checkbox" value="3000,4000,5000,6000"> Used</label>
+          <label><input type="checkbox" value="7000"> For parts</label>
+        </div>
+
+        <div class="checks spaced">
+          <label><input type="checkbox" id="sf-notify" checked> Notify me</label>
+          <label><input type="checkbox" id="sf-us" checked> US only</label>
+          <label><input type="checkbox" id="sf-active" checked> Active</label>
+        </div>
+
+        <label class="fl" for="sf-label">Name <span class="opt">optional</span></label>
+        <input id="sf-label" placeholder="Named automatically if left blank">
+
+        <div id="sf-preview" class="preview" hidden></div>
+
+        <div class="two">
+          <button type="button" id="sf-test" class="ghost">Test search</button>
+          <button type="submit" class="go">Save</button>
+        </div>
+        <button type="button" id="sf-cancel" class="ghost wide">Cancel</button>
+        <button type="button" id="sf-delete" class="danger wide" hidden>Delete this search</button>
+      </form>
+
       <div id="feed"></div>
       <div id="feed-empty" class="empty">Pull the refresh button to load listings from your saved searches.</div>
     </section>
@@ -288,7 +395,54 @@ async function api(url, opts = {}) {
 async function rest(path, opts) {
   const r = await api(REST + path, opts);
   if (!r.ok) throw new Error(await r.text());
-  return r.status === 204 ? null : r.json();
+  // PostgREST answers 201/204 with an empty body unless asked for a
+  // representation, so parse defensively rather than assuming JSON.
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// ── Search-query mini-syntax ──────────────────────────────────────────────────
+// Mirrors extension/lib/query.js. `keywords` stores everything, so the three
+// form fields need no extra columns:
+//   words → must match · (a,b,c) → any of · -word → exclude (filtered by us,
+//   because eBay's Browse API has no NOT operator).
+function parseQuery(keywords = "") {
+  const exclude = [];
+  const noNots = String(keywords ?? "").replace(/-(?:"([^"]*)"|(\S+))/g, (_, q, b) => {
+    const w = (q ?? b ?? "").trim(); if (w) exclude.push(w); return " ";
+  });
+  let anyOf = [];
+  const noAny = noNots.replace(/\(([^)]*)\)/, (_, inner) => {
+    anyOf = inner.split(",").map((s) => s.trim()).filter(Boolean); return " ";
+  });
+  return { base: noAny.replace(/\s+/g, " ").trim(), anyOf, exclude };
+}
+function composeQuery({ base = "", anyOf = [], exclude = [] } = {}) {
+  const parts = [String(base).trim()];
+  const any = anyOf.map((s) => s.trim()).filter(Boolean);
+  if (any.length) parts.push(`(${any.join(",")})`);
+  for (const w of exclude.map((s) => s.trim()).filter(Boolean)) {
+    parts.push(/\s/.test(w) ? `-"${w}"` : `-${w}`);
+  }
+  return parts.filter(Boolean).join(" ").trim();
+}
+function ebayQuery(keywords) {
+  const { base, anyOf } = parseQuery(keywords);
+  return composeQuery({ base, anyOf });
+}
+function applyExclusions(keywords, items) {
+  const { exclude } = parseQuery(keywords);
+  if (!exclude.length) return items;
+  const bad = exclude.map((w) => w.toLowerCase());
+  return items.filter((it) =>
+    !bad.some((w) => String(it?.title ?? "").toLowerCase().includes(w)));
+}
+function describeQuery({ base, anyOf, exclude }) {
+  const bits = [];
+  if (base) bits.push(`must contain “${base}”`);
+  if (anyOf?.length) bits.push(`plus any of ${anyOf.map((w) => `“${w}”`).join(", ")}`);
+  if (exclude?.length) bits.push(`but never ${exclude.map((w) => `“${w}”`).join(", ")}`);
+  return bits.length ? bits.join(", ") : "everything (no words yet)";
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -390,7 +544,8 @@ async function refreshFeed() {
       const r = await api(`${FN}/ebay-search`, {
         method: "POST",
         body: JSON.stringify({
-          searchId: s.id, keywords: s.keywords,
+          searchId: s.id,
+          keywords: ebayQuery(s.keywords), // "-word" exclusions aren't eBay syntax
           priceMin: s.price_min, priceMax: s.price_max,
           buyingOptions: s.buying_options, usOnly: s.us_only,
           categoryIds: s.category_ids ?? undefined,
@@ -407,7 +562,7 @@ async function refreshFeed() {
         throw new Error(j.error ?? `error ${r.status}`);
       }
       const fresh = new Set(j.newItems ?? []);
-      for (const it of j.items ?? []) {
+      for (const it of applyExclusions(s.keywords, j.items ?? [])) {
         if (known.has(it.itemId)) continue;
         const row = { ...it, searchId: s.id, searchLabel: s.label,
                       isNew: fresh.has(it.itemId), fetchedAt: Date.now() };
@@ -436,11 +591,159 @@ function renderChips() {
     const b = document.createElement("button");
     b.className = "schip" + (state.filter === val ? " on" : "");
     b.textContent = label;
-    b.addEventListener("click", () => { state.filter = val; renderChips(); renderFeed(); });
+    b.addEventListener("click", () => {
+      // Tapping the already-selected search opens it for editing; otherwise filter.
+      if (val && state.filter === val) {
+        openForm(state.searches.find((s) => s.id === val));
+      } else {
+        state.filter = val; renderChips(); renderFeed();
+      }
+    });
     wrap.append(b);
   };
   mk("All", "");
   for (const s of state.searches) mk(s.label, s.id);
+}
+
+// ── Search editor ─────────────────────────────────────────────────────────────
+const csv = (v) => v.split(",").map((x) => x.trim()).filter(Boolean);
+
+function setTypeSeg(buyingOptions) {
+  const want = (buyingOptions?.length ? buyingOptions : ["FIXED_PRICE"]).slice().sort().join(",");
+  const btns = [...$("sf-type").querySelectorAll("button")];
+  const chosen = btns.find((b) => b.dataset.v.split(",").slice().sort().join(",") === want) ?? btns[0];
+  for (const b of btns) b.classList.toggle("on", b === chosen);
+}
+const getTypeSeg = () =>
+  ($("sf-type").querySelector("button.on")?.dataset.v ?? "FIXED_PRICE").split(",");
+
+function setConditions(ids) {
+  const have = new Set((ids ?? []).map(String));
+  for (const cb of $("sf-cond").querySelectorAll("input")) {
+    cb.checked = cb.value.split(",").some((v) => have.has(v));
+  }
+}
+function getConditions() {
+  const out = [];
+  for (const cb of $("sf-cond").querySelectorAll("input")) {
+    if (cb.checked) out.push(...cb.value.split(","));
+  }
+  return out;
+}
+
+function openForm(s) {
+  const q = parseQuery(s?.keywords ?? "");
+  $("sform").hidden = false;
+  $("sf-preview").hidden = true;
+  $("sf-id").value = s?.id ?? "";
+  $("sf-label").value = s?.label ?? "";
+  $("sf-keywords").value = q.base;
+  $("sf-any").value = q.anyOf.join(", ");
+  $("sf-not").value = q.exclude.join(", ");
+  $("sf-min").value = s?.price_min ?? "";
+  $("sf-max").value = s?.price_max ?? "";
+  setTypeSeg(s?.buying_options);
+  setConditions(s?.condition_ids);
+  $("sf-notify").checked = s?.notify ?? true;
+  $("sf-us").checked = s?.us_only ?? true;
+  $("sf-active").checked = s?.active ?? true;
+  $("sf-delete").hidden = !s;
+  $("sform").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function readForm() {
+  const base = $("sf-keywords").value.trim();
+  const anyOf = csv($("sf-any").value);
+  const exclude = csv($("sf-not").value);
+  const lim = state.limits.find((l) => l.tier === state.sub?.tier);
+  const conds = getConditions();
+  return {
+    label: $("sf-label").value.trim() || (base || anyOf[0] || "New search").slice(0, 40),
+    keywords: composeQuery({ base, anyOf, exclude }),
+    price_min: $("sf-min").value ? Number($("sf-min").value) : null,
+    price_max: $("sf-max").value ? Number($("sf-max").value) : null,
+    buying_options: getTypeSeg(),
+    condition_ids: conds.length ? conds : null,
+    poll_seconds: lim?.min_poll_seconds ?? 60,
+    us_only: $("sf-us").checked,
+    notify: $("sf-notify").checked,
+    active: $("sf-active").checked,
+  };
+}
+
+async function testForm() {
+  const body = readForm();
+  const box = $("sf-preview"), btn = $("sf-test");
+  if (!body.keywords) return toast("Type what you're looking for first");
+  btn.disabled = true; btn.textContent = "Testing…";
+  box.hidden = false; box.className = "preview"; box.textContent = "Searching eBay…";
+  try {
+    const r = await api(`${FN}/ebay-search`, {
+      method: "POST",
+      body: JSON.stringify({
+        keywords: ebayQuery(body.keywords),
+        priceMin: body.price_min, priceMax: body.price_max,
+        buyingOptions: body.buying_options, usOnly: body.us_only,
+        conditionIds: body.condition_ids ?? undefined, limit: 10,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error ?? `error ${r.status}`);
+    const items = applyExclusions(body.keywords, j.items ?? []);
+    box.textContent = "";
+    const head = document.createElement("div");
+    head.className = "pv-head";
+    head.textContent = items.length
+      ? `Found ${j.total ?? items.length} listings — newest few:`
+      : "No listings matched. Try fewer words.";
+    box.append(head);
+    for (const it of items.slice(0, 3)) {
+      const d = document.createElement("div");
+      d.className = "pv-item";
+      d.textContent = `• ${money(it.currentBid ?? it.price)} — ${(it.title ?? "").slice(0, 60)}`;
+      box.append(d);
+    }
+    const why = document.createElement("div");
+    why.className = "pv-item"; why.style.marginTop = "6px";
+    why.textContent = describeQuery(parseQuery(body.keywords));
+    box.append(why);
+  } catch (e) {
+    box.className = "preview bad";
+    box.textContent = String(e.message) === "plan_upgrade_required"
+      ? "That needs a higher plan (auctions are Pro)." : `Couldn't test: ${e.message}`;
+  } finally { btn.disabled = false; btn.textContent = "Test search"; }
+}
+
+async function submitForm(ev) {
+  ev.preventDefault();
+  const id = $("sf-id").value;
+  const lim = state.limits.find((l) => l.tier === state.sub?.tier);
+  if (!id && lim && state.searches.length >= lim.max_saved_searches) {
+    return toast(`Plan limit: ${lim.max_saved_searches} searches`);
+  }
+  const body = readForm();
+  try {
+    if (id) await rest(`/saved_searches?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(body) });
+    else await rest("/saved_searches", { method: "POST", body: JSON.stringify(body) });
+    $("sform").hidden = true;
+    await loadSearches();
+    renderChips();
+    toast(id ? "Search updated" : "Search created");
+    refreshFeed();
+  } catch (e) { toast("Couldn't save — check your words and try again"); }
+}
+
+async function deleteForm() {
+  const id = $("sf-id").value;
+  if (!id || !confirm("Delete this saved search?")) return;
+  try {
+    await rest(`/saved_searches?id=eq.${id}`, { method: "DELETE" });
+    $("sform").hidden = true;
+    if (state.filter === id) state.filter = "";
+    await loadSearches();
+    renderChips(); renderFeed();
+    toast("Search deleted");
+  } catch { toast("Couldn't delete"); }
 }
 
 function card(item, opts = {}) {
@@ -663,6 +966,16 @@ $("signin").addEventListener("submit", async (e) => {
 
 $("refresh").addEventListener("click", refreshFeed);
 $("signout").addEventListener("click", signOut);
+$("btn-add").addEventListener("click", () => openForm(null));
+$("sf-cancel").addEventListener("click", () => ($("sform").hidden = true));
+$("sf-test").addEventListener("click", testForm);
+$("sf-delete").addEventListener("click", deleteForm);
+$("sform").addEventListener("submit", submitForm);
+$("sf-type").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  for (const x of $("sf-type").querySelectorAll("button")) x.classList.toggle("on", x === b);
+});
 
 for (const t of document.querySelectorAll(".tab")) {
   t.addEventListener("click", async () => {
