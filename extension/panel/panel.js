@@ -147,6 +147,15 @@ function renderSearchChips() {
     wrap.append(chip);
     sel.add(new Option(s.label, s.id));
   }
+  // Rebuilding the <select> above resets it to "All searches" while
+  // state.searchFilter still points at the previously chosen search — so the
+  // feed stays filtered by something the UI no longer displays, and looks
+  // empty until you touch the dropdown. Re-sync, dropping the filter if that
+  // search no longer exists.
+  if (state.searchFilter && !state.searches.some((s) => s.id === state.searchFilter)) {
+    state.searchFilter = "";
+  }
+  sel.value = state.searchFilter;
 }
 
 function makeCard(item, opts = {}) {
@@ -555,10 +564,16 @@ async function submitSearchForm(ev) {
   }
   try {
     if (id) await db.updateSearch(id, body);
-    else await db.createSearch(body);
+    else {
+      await db.createSearch(body);
+      // Show everything after adding a search, otherwise the feed stays
+      // filtered to a different one and the new search looks broken.
+      state.searchFilter = "";
+    }
     $("search-form").hidden = true;
     await loadSearches();
     renderSearchChips();
+    renderFeed();
     chrome.runtime.sendMessage({ type: "resync" }).catch(() => {});
     toast(id ? "Search updated" : "Search created — monitoring started");
   } catch (e) { toast(e.message); }
