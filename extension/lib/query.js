@@ -58,6 +58,51 @@ export function applyExclusions(keywords, items) {
   });
 }
 
+// ── Deal-score comparables ────────────────────────────────────────────────────
+// eBay titles are keyword-stuffed ("... w/ Dock & Joy-Con FREE SHIP L@@K"), so
+// using one verbatim as the comp query gives every listing a different, noisy
+// comp set: six near-identical Switch OLEDs came back with medians 1.4x apart
+// and one had only 9 comps. Reducing the title to its distinctive product words
+// gives a stable query and a full sample.
+const COMP_NOISE = new Set(`
+lot lots bundle set pack pcs pieces piece with and for the of in to
+new used open box sealed mint near excellent very good acceptable condition
+tested works working perfect rare htf vintage authentic genuine original
+oem official free shipping fast ship ships bonus extra plus complete cib loose
+read please see description look wow nice awesome great deal sale price obo
+best offer nib nwt bnib model system unit included includes incl brand
+`.trim().split(/\s+/));
+
+/** Reduce a listing title to a short, stable query for pricing comparables. */
+export function compQuery(title, max = 5) {
+  const out = [];
+  for (const t of String(title ?? "").toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .split(/\s+/)) {
+    if (!t || t.length < 2 || COMP_NOISE.has(t) || out.includes(t)) continue;
+    out.push(t);
+    if (out.length >= max) break;
+  }
+  return out.join(" ");
+}
+
+/**
+ * eBay condition label → the condition IDs the Browse API filters on, so a
+ * for-parts unit isn't priced against new ones. Deliberately broad buckets:
+ * narrower ones shrink the comp sample until the median is noise again.
+ */
+export function conditionIdsFor(condition) {
+  const c = String(condition ?? "").toLowerCase();
+  if (!c) return undefined;
+  if (c.includes("part") || c.includes("not working")) return ["7000"];
+  if (c.includes("refurb")) return ["2000", "2010", "2020", "2030", "2500"];
+  if (c.includes("new") || c.includes("open box")) return ["1000", "1500"];
+  if (c.includes("used") || c.includes("good") || c.includes("acceptable")) {
+    return ["3000", "4000", "5000", "6000"];
+  }
+  return undefined; // unknown label — don't over-filter
+}
+
 /** A short plain-English summary of a search, for the form's live preview. */
 export function describeQuery({ base, anyOf, exclude }) {
   const bits = [];

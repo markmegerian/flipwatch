@@ -1,7 +1,8 @@
 // Flipwatch side panel controller.
 import { AuthError, PlanError, db, dealScore, getSession, searchEbay } from "../lib/api.js";
 import {
-  applyExclusions, composeQuery, describeQuery, ebayQuery, parseQuery,
+  applyExclusions, compQuery, composeQuery, conditionIdsFor, describeQuery,
+  ebayQuery, parseQuery,
 } from "../lib/query.js";
 
 const $ = (id) => document.getElementById(id);
@@ -368,17 +369,26 @@ async function scoreCard(item, node, btn) {
   btn.disabled = true;
   btn.textContent = "…";
   try {
+    const isAuction = item.currentBid != null ||
+      (item.buyingOptions ?? []).includes("AUCTION");
     const price = item.currentBid ?? item.price;
-    const r = await dealScore(item.title.slice(0, 80), price);
+    // Compare like with like: a distilled product query, and the same
+    // condition bucket. Passing the raw title scored every listing against a
+    // different comp set, which is what made scores look arbitrary.
+    const r = await dealScore(compQuery(item.title), price, conditionIdsFor(item.condition));
     const badge = node.querySelector(".c-score");
     badge.hidden = false;
     if (r.score == null) {
-      badge.textContent = "no comps";
+      badge.textContent = r.sampleSize ? `only ${r.sampleSize} comps` : "no comps";
       badge.className = "c-score mid";
     } else {
-      badge.textContent = `${r.verdict.replace("_", " ")} · median ${fmt$(r.median)}`;
-      badge.className = "c-score " +
-        (r.verdict === "steal" || r.verdict === "great" ? "good"
+      // Comps are Buy It Now, so a mid-auction bid is not a like-for-like
+      // price — say so rather than calling every live auction a steal.
+      badge.textContent = isAuction
+        ? `bid is ${Math.round((price / r.median) * 100)}% of BIN median ${fmt$(r.median)}`
+        : `${r.verdict.replace("_", " ")} · median ${fmt$(r.median)} (${r.sampleSize} comps)`;
+      badge.className = "c-score " + (isAuction ? "mid"
+        : r.verdict === "steal" || r.verdict === "great" ? "good"
           : r.verdict === "fair" ? "mid" : "bad");
     }
     btn.remove();
