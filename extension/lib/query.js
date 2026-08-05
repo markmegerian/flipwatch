@@ -12,12 +12,21 @@
 // untouched. Exclusions are ours: eBay has no NOT operator, so we strip them
 // from the query and filter the returned titles ourselves.
 
-/** Split a stored keywords string into the three fields the form edits. */
+/** Split a stored keywords string into the fields the form edits. */
 export function parseQuery(keywords = "") {
   const src = String(keywords ?? "");
+  // Optional reference price, e.g. `value:250`. Stored here rather than in a
+  // column because the schema can't be migrated from this session; it is
+  // stripped before the query reaches eBay (see ebayQuery).
+  let value = null;
+  const withoutValue = src.replace(/(?:^|\s)value:(\d+(?:\.\d+)?)/i, (_, v) => {
+    const n = Number(v);
+    if (isFinite(n) && n > 0) value = n;
+    return " ";
+  });
   const exclude = [];
   // -word  or  -"several words"
-  const withoutNots = src.replace(/-(?:"([^"]*)"|(\S+))/g, (_, quoted, bare) => {
+  const withoutNots = withoutValue.replace(/-(?:"([^"]*)"|(\S+))/g, (_, quoted, bare) => {
     const w = (quoted ?? bare ?? "").trim();
     if (w) exclude.push(w);
     return " ";
@@ -27,18 +36,31 @@ export function parseQuery(keywords = "") {
     anyOf = inner.split(",").map((s) => s.trim()).filter(Boolean);
     return " ";
   });
-  return { base: withoutAny.replace(/\s+/g, " ").trim(), anyOf, exclude };
+  return { base: withoutAny.replace(/\s+/g, " ").trim(), anyOf, exclude, value };
 }
 
-/** Rebuild the stored keywords string from the form's three fields. */
-export function composeQuery({ base = "", anyOf = [], exclude = [] } = {}) {
+/** Rebuild the stored keywords string from the form's fields. */
+export function composeQuery({ base = "", anyOf = [], exclude = [], value = null } = {}) {
   const parts = [String(base).trim()];
   const any = anyOf.map((s) => String(s).trim()).filter(Boolean);
   if (any.length) parts.push(`(${any.join(",")})`);
   for (const w of exclude.map((s) => String(s).trim()).filter(Boolean)) {
     parts.push(/\s/.test(w) ? `-"${w}"` : `-${w}`);
   }
+  const v = Number(value);
+  if (isFinite(v) && v > 0) parts.push(`value:${v}`);
   return parts.filter(Boolean).join(" ").trim();
+}
+
+/**
+ * Compare a listing price against the search's reference value.
+ * Returns null when either is missing, so callers can skip the badge.
+ */
+export function targetStanding(price, value) {
+  const p = Number(price), v = Number(value);
+  if (!isFinite(p) || p <= 0 || !isFinite(v) || v <= 0) return null;
+  const pct = Math.round((p / v) * 100);
+  return { pct, tone: pct <= 70 ? "good" : pct <= 100 ? "mid" : "bad" };
 }
 
 /** The query actually sent to eBay: exclusions removed, OR-group kept. */

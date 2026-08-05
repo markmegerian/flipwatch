@@ -2,7 +2,7 @@
 import { AuthError, PlanError, db, dealScore, getSession, searchEbay } from "../lib/api.js";
 import {
   applyExclusions, compQuery, composeQuery, conditionIdsFor, describeQuery,
-  ebayQuery, parseQuery,
+  ebayQuery, parseQuery, targetStanding,
 } from "../lib/query.js";
 
 const $ = (id) => document.getElementById(id);
@@ -169,6 +169,21 @@ function makeCard(item, opts = {}) {
   node.querySelector(".c-seller").textContent = item.seller
     ? `${item.seller}${item.sellerFeedback != null ? ` (${item.sellerFeedback})` : ""}` : "";
   node.querySelector(".c-new").hidden = !item.isNew;
+
+  // If this listing's search has a reference value, show how it compares —
+  // the fastest possible "is this worth clicking" signal.
+  const owning = state.searches.find((s) => s.id === item.searchId);
+  const stand = targetStanding(
+    item.currentBid ?? item.price,
+    owning ? parseQuery(owning.keywords).value : null,
+  );
+  if (stand) {
+    const chip = document.createElement("span");
+    chip.className = `c-target ${stand.tone}`;
+    chip.textContent = `${stand.pct}% of target`;
+    node.querySelector(".c-meta").append(chip);
+  }
+
   const sub = node.querySelector(".c-sub");
   sub.textContent = opts.subText ?? [
     item.searchLabel, item.fetchedAt ? timeAgo(item.fetchedAt) : null,
@@ -489,6 +504,17 @@ function openSearchForm(s) {
   $("sf-active").checked = s?.active ?? true;
   $("sf-blocked").value = (s?.blocked_sellers ?? []).join(", ");
   $("sf-delete").hidden = !s;
+
+  // Reference pricing is a paid feature. Gating here is packaging, not a
+  // security boundary — the value never reaches the server as anything but
+  // text and costs nothing to evaluate, so there is nothing to protect.
+  const pro = planAllows("deal_score_enabled");
+  $("sf-value").value = q.value ?? "";
+  $("sf-value").disabled = !pro;
+  $("sf-value-tag").hidden = pro;
+  $("sf-value-hint").textContent = pro
+    ? "What one of these is normally worth to you. Listings are then flagged by how far under it they are."
+    : "Upgrade to Pro to flag listings against a value you set.";
 }
 
 const csv = (v) => v.split(",").map((x) => x.trim()).filter(Boolean);
@@ -503,7 +529,14 @@ function readSearchForm() {
     // Name is optional — fall back to something recognisable rather than
     // making the user invent one.
     label: $("sf-label").value.trim() || (base || anyOf[0] || "New search").slice(0, 40),
-    keywords: composeQuery({ base, anyOf, exclude }),
+    keywords: composeQuery({
+      base, anyOf, exclude,
+      // Preserve an existing value even if the field is locked, so editing a
+      // search on a lapsed plan doesn't silently discard it.
+      value: planAllows("deal_score_enabled")
+        ? ($("sf-value").value ? Number($("sf-value").value) : null)
+        : parseQuery(state.searches.find((s) => s.id === $("sf-id").value)?.keywords).value,
+    }),
     price_min: $("sf-min").value ? Number($("sf-min").value) : null,
     price_max: $("sf-max").value ? Number($("sf-max").value) : null,
     buying_options: getTypeSeg(),
