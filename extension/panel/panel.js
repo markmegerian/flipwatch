@@ -1,5 +1,9 @@
 // Flipwatch side panel controller.
-import { AuthError, PlanError, db, dealScore, getSession } from "../lib/api.js";
+import { AuthError, PlanError, db, dealScore, getSession, searchEbay } from "../lib/api.js";
+import {
+  applyExclusions, compQuery, composeQuery, conditionIdsFor, describeQuery,
+  ebayQuery, parseQuery, targetStanding,
+} from "../lib/query.js";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -144,6 +148,15 @@ function renderSearchChips() {
     wrap.append(chip);
     sel.add(new Option(s.label, s.id));
   }
+  // Rebuilding the <select> above resets it to "All searches" while
+  // state.searchFilter still points at the previously chosen search — so the
+  // feed stays filtered by something the UI no longer displays, and looks
+  // empty until you touch the dropdown. Re-sync, dropping the filter if that
+  // search no longer exists.
+  if (state.searchFilter && !state.searches.some((s) => s.id === state.searchFilter)) {
+    state.searchFilter = "";
+  }
+  sel.value = state.searchFilter;
 }
 
 function makeCard(item, opts = {}) {
@@ -156,6 +169,21 @@ function makeCard(item, opts = {}) {
   node.querySelector(".c-seller").textContent = item.seller
     ? `${item.seller}${item.sellerFeedback != null ? ` (${item.sellerFeedback})` : ""}` : "";
   node.querySelector(".c-new").hidden = !item.isNew;
+
+  // If this listing's search has a reference value, show how it compares —
+  // the fastest possible "is this worth clicking" signal.
+  const owning = state.searches.find((s) => s.id === item.searchId);
+  const stand = targetStanding(
+    item.currentBid ?? item.price,
+    owning ? parseQuery(owning.keywords).value : null,
+  );
+  if (stand) {
+    const chip = document.createElement("span");
+    chip.className = `c-target ${stand.tone}`;
+    chip.textContent = `${stand.pct}% of target`;
+    node.querySelector(".c-meta").append(chip);
+  }
+
   const sub = node.querySelector(".c-sub");
   sub.textContent = opts.subText ?? [
     item.searchLabel, item.fetchedAt ? timeAgo(item.fetchedAt) : null,
@@ -356,17 +384,26 @@ async function scoreCard(item, node, btn) {
   btn.disabled = true;
   btn.textContent = "…";
   try {
+    const isAuction = item.currentBid != null ||
+      (item.buyingOptions ?? []).includes("AUCTION");
     const price = item.currentBid ?? item.price;
-    const r = await dealScore(item.title.slice(0, 80), price);
+    // Compare like with like: a distilled product query, and the same
+    // condition bucket. Passing the raw title scored every listing against a
+    // different comp set, which is what made scores look arbitrary.
+    const r = await dealScore(compQuery(item.title), price, conditionIdsFor(item.condition));
     const badge = node.querySelector(".c-score");
     badge.hidden = false;
     if (r.score == null) {
-      badge.textContent = "no comps";
+      badge.textContent = r.sampleSize ? `only ${r.sampleSize} comps` : "no comps";
       badge.className = "c-score mid";
     } else {
-      badge.textContent = `${r.verdict.replace("_", " ")} · median ${fmt$(r.median)}`;
-      badge.className = "c-score " +
-        (r.verdict === "steal" || r.verdict === "great" ? "good"
+      // Comps are Buy It Now, so a mid-auction bid is not a like-for-like
+      // price — say so rather than calling every live auction a steal.
+      badge.textContent = isAuction
+        ? `bid is ${Math.round((price / r.median) * 100)}% of BIN median ${fmt$(r.median)}`
+        : `${r.verdict.replace("_", " ")} · median ${fmt$(r.median)} (${r.sampleSize} comps)`;
+      badge.className = "c-score " + (isAuction ? "mid"
+        : r.verdict === "steal" || r.verdict === "great" ? "good"
           : r.verdict === "fair" ? "mid" : "bad");
     }
     btn.remove();
@@ -404,51 +441,182 @@ async function toggleSnipe(item, btn) {
 
 // ── Search form ───────────────────────────────────────────────────────────────
 
+// ── Listing-type segmented control ────────────────────────────────────────────
+// A <select> silently renders blank when the stored value isn't one of its
+// options (e.g. a search containing BEST_OFFER), and then saves an empty
+// buying_options that breaks the search. A segmented control can't do that:
+// anything unrecognised falls back to a valid selection.
+function setTypeSeg(buyingOptions) {
+  const want = (buyingOptions?.length ? buyingOptions : ["FIXED_PRICE"]).slice().sort().join(",");
+  const btns = [...$("sf-type").querySelectorAll("button")];
+  const match = btns.find((b) => b.dataset.v.split(",").slice().sort().join(",") === want);
+  const chosen = match ?? btns[0];
+  for (const b of btns) b.classList.toggle("on", b === chosen);
+}
+function getTypeSeg() {
+  const on = $("sf-type").querySelector("button.on");
+  return (on?.dataset.v ?? "FIXED_PRICE").split(",");
+}
+$("sf-type").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  for (const x of $("sf-type").querySelectorAll("button")) x.classList.toggle("on", x === b);
+});
+
+function setConditions(ids) {
+  const have = new Set((ids ?? []).map(String));
+  for (const cb of $("sf-cond").querySelectorAll("input")) {
+    cb.checked = cb.value.split(",").some((v) => have.has(v));
+  }
+}
+function getConditions() {
+  const out = [];
+  for (const cb of $("sf-cond").querySelectorAll("input")) {
+    if (cb.checked) out.push(...cb.value.split(","));
+  }
+  return out;
+}
+
 function openSearchForm(s) {
   $("search-form").hidden = false;
+  $("sf-preview").hidden = true;
+  const q = parseQuery(s?.keywords ?? "");
   $("sf-id").value = s?.id ?? "";
   $("sf-label").value = s?.label ?? "";
-  $("sf-keywords").value = s?.keywords ?? "";
+  $("sf-keywords").value = q.base;
+  $("sf-any").value = q.anyOf.join(", ");
+  $("sf-not").value = q.exclude.join(", ");
   $("sf-min").value = s?.price_min ?? "";
   $("sf-max").value = s?.price_max ?? "";
-  $("sf-type").value = (s?.buying_options ?? ["FIXED_PRICE"]).join(",");
-  $("sf-poll").value = String(s?.poll_seconds ?? 60);
+  setTypeSeg(s?.buying_options);
+  setConditions(s?.condition_ids);
+  // Same failure mode as the old type <select>: an unlisted value renders
+  // blank. Snap to the closest offered interval instead.
+  const poll = Number(s?.poll_seconds ?? 60);
+  const opts = [...$("sf-poll").options].map((o) => Number(o.value));
+  $("sf-poll").value = String(
+    opts.includes(poll)
+      ? poll
+      : opts.reduce((a, b) => (Math.abs(b - poll) < Math.abs(a - poll) ? b : a)),
+  );
   $("sf-us").checked = s?.us_only ?? true;
   $("sf-notify").checked = s?.notify ?? true;
   $("sf-active").checked = s?.active ?? true;
   $("sf-blocked").value = (s?.blocked_sellers ?? []).join(", ");
   $("sf-delete").hidden = !s;
+
+  // Reference pricing is a paid feature. Gating here is packaging, not a
+  // security boundary — the value never reaches the server as anything but
+  // text and costs nothing to evaluate, so there is nothing to protect.
+  const pro = planAllows("deal_score_enabled");
+  $("sf-value").value = q.value ?? "";
+  $("sf-value").disabled = !pro;
+  $("sf-value-tag").hidden = pro;
+  $("sf-value-hint").textContent = pro
+    ? "What one of these is normally worth to you. Listings are then flagged by how far under it they are."
+    : "Upgrade to Pro to flag listings against a value you set.";
+}
+
+const csv = (v) => v.split(",").map((x) => x.trim()).filter(Boolean);
+
+/** Everything the form currently describes, in saved_searches shape. */
+function readSearchForm() {
+  const base = $("sf-keywords").value.trim();
+  const anyOf = csv($("sf-any").value);
+  const exclude = csv($("sf-not").value);
+  const lim = state.limits.find((l) => l.tier === state.sub?.tier);
+  return {
+    // Name is optional — fall back to something recognisable rather than
+    // making the user invent one.
+    label: $("sf-label").value.trim() || (base || anyOf[0] || "New search").slice(0, 40),
+    keywords: composeQuery({
+      base, anyOf, exclude,
+      // Preserve an existing value even if the field is locked, so editing a
+      // search on a lapsed plan doesn't silently discard it.
+      value: planAllows("deal_score_enabled")
+        ? ($("sf-value").value ? Number($("sf-value").value) : null)
+        : parseQuery(state.searches.find((s) => s.id === $("sf-id").value)?.keywords).value,
+    }),
+    price_min: $("sf-min").value ? Number($("sf-min").value) : null,
+    price_max: $("sf-max").value ? Number($("sf-max").value) : null,
+    buying_options: getTypeSeg(),
+    condition_ids: getConditions().length ? getConditions() : null,
+    poll_seconds: Math.max(parseInt($("sf-poll").value, 10), lim?.min_poll_seconds ?? 60),
+    us_only: $("sf-us").checked,
+    notify: $("sf-notify").checked,
+    active: $("sf-active").checked,
+    blocked_sellers: csv($("sf-blocked").value),
+  };
+}
+
+/** Run the search as configured, without saving, so mistakes are obvious. */
+async function testSearchForm() {
+  const body = readSearchForm();
+  const box = $("sf-preview");
+  const btn = $("sf-test");
+  if (!body.keywords) return toast("Type what you're looking for first");
+  btn.disabled = true; btn.textContent = "Testing…";
+  box.hidden = false; box.className = "preview"; box.textContent = "Searching eBay…";
+  try {
+    const res = await searchEbay({
+      keywords: ebayQuery(body.keywords),          // exclusions aren't eBay syntax
+      priceMin: body.price_min, priceMax: body.price_max,
+      buyingOptions: body.buying_options, usOnly: body.us_only,
+      conditionIds: body.condition_ids ?? undefined,
+      blockedSellers: body.blocked_sellers, limit: 10,
+    });
+    const items = applyExclusions(body.keywords, res.items ?? []);
+    box.textContent = "";
+    const head = document.createElement("div");
+    head.className = "pv-head";
+    head.textContent = items.length
+      ? `Found ${res.total ?? items.length} listings — newest few:`
+      : "No listings matched. Try fewer words.";
+    box.append(head);
+    for (const it of items.slice(0, 3)) {
+      const row = document.createElement("div");
+      row.className = "pv-item";
+      row.textContent = `• ${fmt$(it.currentBid ?? it.price)} — ${(it.title ?? "").slice(0, 64)}`;
+      box.append(row);
+    }
+    const why = document.createElement("div");
+    why.className = "pv-item";
+    why.style.marginTop = "6px";
+    why.textContent = describeQuery(parseQuery(body.keywords));
+    box.append(why);
+  } catch (e) {
+    box.className = "preview bad";
+    box.textContent = e instanceof PlanError
+      ? "That needs a higher plan (auctions are Pro)."
+      : `Couldn't test: ${e.message}`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Test search";
+  }
 }
 
 async function submitSearchForm(ev) {
   ev.preventDefault();
   const id = $("sf-id").value;
   const lim = state.limits.find((l) => l.tier === state.sub?.tier);
-  const poll = Math.max(parseInt($("sf-poll").value, 10), lim?.min_poll_seconds ?? 60);
-  if (poll !== parseInt($("sf-poll").value, 10)) {
-    toast(`Your plan's fastest refresh is ${lim.min_poll_seconds}s`);
+  const body = readSearchForm();
+  if (body.poll_seconds !== parseInt($("sf-poll").value, 10)) {
+    toast(`Your plan checks every ${body.poll_seconds}s at fastest`);
   }
   if (!id && lim && state.searches.length >= lim.max_saved_searches) {
     return toast(`Plan limit: ${lim.max_saved_searches} searches. Upgrade for more.`);
   }
-  const body = {
-    label: $("sf-label").value.trim(),
-    keywords: $("sf-keywords").value.trim(),
-    price_min: $("sf-min").value ? Number($("sf-min").value) : null,
-    price_max: $("sf-max").value ? Number($("sf-max").value) : null,
-    buying_options: $("sf-type").value.split(","),
-    poll_seconds: poll,
-    us_only: $("sf-us").checked,
-    notify: $("sf-notify").checked,
-    active: $("sf-active").checked,
-    blocked_sellers: $("sf-blocked").value.split(",").map((s) => s.trim()).filter(Boolean),
-  };
   try {
     if (id) await db.updateSearch(id, body);
-    else await db.createSearch(body);
+    else {
+      await db.createSearch(body);
+      // Show everything after adding a search, otherwise the feed stays
+      // filtered to a different one and the new search looks broken.
+      state.searchFilter = "";
+    }
     $("search-form").hidden = true;
     await loadSearches();
     renderSearchChips();
+    renderFeed();
     chrome.runtime.sendMessage({ type: "resync" }).catch(() => {});
     toast(id ? "Search updated" : "Search created — monitoring started");
   } catch (e) { toast(e.message); }
@@ -503,6 +671,7 @@ $("btn-settings").addEventListener("click", () => chrome.runtime.openOptionsPage
 $("gate-btn").addEventListener("click", () => chrome.runtime.openOptionsPage());
 $("btn-add-search").addEventListener("click", () => openSearchForm(null));
 $("sf-cancel").addEventListener("click", () => ($("search-form").hidden = true));
+$("sf-test").addEventListener("click", testSearchForm);
 $("search-form").addEventListener("submit", submitSearchForm);
 $("sf-delete").addEventListener("click", async () => {
   const id = $("sf-id").value;

@@ -1,0 +1,15 @@
+{
+  "name": "Flipwatch",
+  "short_name": "Flipwatch",
+  "description": "Real-time eBay deal monitoring, auction countdowns, and deal scores.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

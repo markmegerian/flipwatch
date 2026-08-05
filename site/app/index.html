@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Flipwatch</title>
+
+<!-- Home-screen app behaviour on iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Flipwatch">
+<meta name="theme-color" content="#2563eb">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<style>
+  :root {
+    --bg: #ffffff; --bg2: #f7f8fa; --line: #e7e9ee;
+    --text: #16181d; --muted: #8a8f98;
+    --accent: #2563eb; --accent-soft: #eff4ff;
+    --green: #16a34a; --red: #dc2626; --amber: #d97706;
+    --tabbar: rgba(255,255,255,.92);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --bg2: #171a20; --line: #262a33;
+      --text: #e8eaee; --muted: #7d8390;
+      --accent: #3b82f6; --accent-soft: #17233c;
+      --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+      --tabbar: rgba(16,18,22,.92);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior-y: contain; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+  button { font: inherit; cursor: pointer; color: inherit; }
+  input, select {
+    font: 16px/1.4 inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px; width: 100%;
+  }
+  .muted { color: var(--muted); }
+
+  header {
+    position: sticky; top: 0; z-index: 20; background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .bolt { width: 26px; height: 26px; border-radius: 7px; background: var(--accent);
+          display: flex; align-items: center; justify-content: center; flex: none; }
+  .bolt svg { width: 15px; height: 15px; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; flex: 1; }
+  .chip {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    background: var(--accent-soft); color: var(--accent); padding: 4px 8px; border-radius: 999px;
+  }
+  .iconbtn {
+    background: none; border: none; padding: 8px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .iconbtn:active { background: var(--bg2); }
+  .iconbtn svg { width: 20px; height: 20px; }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+  main { padding: 12px 16px 24px; }
+  .pane { display: none; }
+  .pane.on { display: block; }
+
+  .row { display: flex; gap: 8px; align-items: center; }
+  .scroller { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+  .scroller::-webkit-scrollbar { display: none; }
+  .schip {
+    flex: none; border: 1px solid var(--line); background: var(--bg2);
+    border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 550; white-space: nowrap;
+  }
+  .schip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .card {
+    display: flex; gap: 11px; border: 1px solid var(--line); border-radius: 14px;
+    padding: 11px; background: var(--bg); margin-bottom: 10px;
+  }
+  .card img {
+    width: 74px; height: 74px; object-fit: cover; border-radius: 10px;
+    flex: none; background: var(--bg2);
+  }
+  .cbody { min-width: 0; flex: 1; }
+  .badge {
+    display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .07em;
+    background: var(--amber); color: #fff; padding: 2px 6px; border-radius: 5px; margin-bottom: 4px;
+  }
+  .ctitle {
+    font-size: 14px; font-weight: 600; line-height: 1.3; margin-bottom: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .cmeta { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 13px; }
+  .price { color: var(--accent); font-weight: 700; }
+  .cd { color: var(--red); font-weight: 650; font-variant-numeric: tabular-nums; font-size: 12px; }
+  .csub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .cacts { display: flex; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
+  .cacts a, .cacts button {
+    border: 1px solid var(--line); background: var(--bg2); border-radius: 9px;
+    padding: 8px 12px; font-size: 13px; font-weight: 550; text-decoration: none; color: inherit;
+  }
+  .cacts .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .cacts .on { background: var(--green); border-color: var(--green); color: #fff; }
+  .score { display: inline-block; font-size: 11px; font-weight: 650; margin-top: 6px;
+           padding: 3px 7px; border-radius: 6px; background: var(--bg2); }
+  .score.good { background: var(--green); color: #fff; }
+  .score.bad  { background: var(--red); color: #fff; }
+
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; font-size: 14px; }
+  .stats { display: flex; gap: 8px; margin-bottom: 14px; }
+  .stat { flex: 1; border: 1px solid var(--line); border-radius: 12px; padding: 11px; text-align: center; }
+  .stat .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .v.pos { color: var(--green); } .stat .v.neg { color: var(--red); }
+  .stat .l { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+  nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    display: flex; background: var(--tabbar); backdrop-filter: saturate(180%) blur(16px);
+    border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; background: none; border: none; padding: 9px 0 7px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 10px; font-weight: 600; color: var(--muted);
+  }
+  nav button.on { color: var(--accent); }
+  nav svg { width: 21px; height: 21px; }
+
+  /* Sign-in */
+  #gate { padding: 8vh 24px; max-width: 400px; margin: 0 auto; }
+  #gate .bolt { width: 46px; height: 46px; border-radius: 13px; margin-bottom: 18px; }
+  #gate .bolt svg { width: 26px; height: 26px; }
+  #gate h2 { font-size: 25px; margin: 0 0 6px; letter-spacing: -.02em; }
+  #gate p { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+  #gate form { display: flex; flex-direction: column; gap: 11px; }
+  #gate button[type=submit] {
+    background: var(--accent); color: #fff; border: none; border-radius: 11px;
+    padding: 14px; font-size: 16px; font-weight: 650;
+  }
+  #gate button[type=submit]:disabled { opacity: .6; }
+  #err { color: var(--red); font-size: 13.5px; }
+
+  /* Search editor */
+  .addbtn {
+    width: 100%; margin-bottom: 12px; padding: 12px; border-radius: 11px;
+    border: 1px dashed var(--line); background: var(--bg2);
+    font-size: 14px; font-weight: 600; color: var(--muted);
+  }
+  #sform {
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; margin-bottom: 14px; background: var(--bg2);
+  }
+  .fl { display: block; font-size: 13px; font-weight: 650; margin: 14px 0 5px; }
+  .fl:first-of-type { margin-top: 0; }
+  .fl .opt { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .hint { margin: 5px 0 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .hint b { color: var(--text); font-weight: 650; }
+  .two { display: flex; gap: 8px; margin-top: 8px; }
+  .two > * { flex: 1; }
+  .checks { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; }
+  .checks.spaced { margin: 16px 0 4px; }
+  .checks label { display: flex; align-items: center; gap: 6px; }
+  .checks input { width: auto; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button {
+    flex: 1; border: none; border-right: 1px solid var(--line); background: var(--bg);
+    padding: 11px 4px; font-size: 13px; font-weight: 550; color: var(--muted);
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  #sform button.go {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 650;
+  }
+  #sform button.ghost {
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 550;
+  }
+  #sform button.danger {
+    background: var(--bg); border: 1px solid var(--red); color: var(--red);
+    border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 550;
+  }
+  #sform button.wide { width: 100%; margin-top: 8px; }
+  .preview {
+    margin-top: 14px; padding: 11px; border-radius: 10px;
+    background: var(--bg); border: 1px solid var(--line); font-size: 12.5px; line-height: 1.5;
+  }
+  .preview .pv-head { font-weight: 650; margin-bottom: 4px; }
+  .preview .pv-item { color: var(--muted); }
+  .preview.bad { border-color: var(--red); color: var(--red); }
+  .tag-pro {
+    background: var(--accent-soft); color: var(--accent); font-weight: 700;
+    padding: 1px 7px; border-radius: 999px; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .05em;
+  }
+  input:disabled { opacity: .55; }
+  .c-target {
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+    background: var(--bg2); color: var(--muted); white-space: nowrap;
+  }
+  .c-target.good { background: var(--green); color: #fff; }
+  .c-target.bad { background: var(--red); color: #fff; }
+
+  #toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 40;
+    background: var(--text); color: var(--bg); padding: 10px 16px;
+    border-radius: 999px; font-size: 13.5px; font-weight: 550; max-width: 88vw;
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<section id="gate" hidden>
+  <div class="bolt"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#fff"/></svg></div>
+  <h2>Flipwatch</h2>
+  <p>Sign in with your Flipwatch account to see your searches and feed.</p>
+  <form id="signin">
+    <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="pass" type="password" placeholder="Password" autocomplete="current-password" required>
+    <div id="err" hidden></div>
+    <button type="submit">Sign in</button>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header>
+    <div class="bolt"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="#fff"/></svg></div>
+    <h1>Flipwatch</h1>
+    <span id="plan" class="chip" hidden></span>
+    <button id="refresh" class="iconbtn" aria-label="Refresh listings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/>
+      </svg>
+    </button>
+    <button id="signout" class="iconbtn" aria-label="Sign out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+      </svg>
+    </button>
+  </header>
+
+  <main>
+    <section id="tab-feed" class="pane on">
+      <div id="chips" class="scroller"></div>
+
+      <button id="btn-add" class="addbtn">+ New search</button>
+
+      <form id="sform" hidden>
+        <input type="hidden" id="sf-id">
+
+        <label class="fl" for="sf-keywords">What are you looking for?</label>
+        <input id="sf-keywords" placeholder="vintage pokemon holo" required>
+        <p class="hint">Words that must appear in every listing.</p>
+
+        <label class="fl" for="sf-any">Any of these <span class="opt">optional</span></label>
+        <input id="sf-any" placeholder="base set, fossil, jungle, neo">
+        <p class="hint">Comma-separated. Matches if a listing has <b>any one</b>.</p>
+
+        <label class="fl" for="sf-not">None of these <span class="opt">optional</span></label>
+        <input id="sf-not" placeholder="damaged, reprint, proxy">
+        <p class="hint">Hides listings containing these words.</p>
+
+        <label class="fl">Price</label>
+        <div class="two">
+          <input id="sf-min" type="number" min="0" step="0.01" placeholder="No minimum">
+          <input id="sf-max" type="number" min="0" step="0.01" placeholder="No maximum">
+        </div>
+
+        <label class="fl">Listing type</label>
+        <div class="seg" id="sf-type">
+          <button type="button" data-v="FIXED_PRICE">Buy It Now</button>
+          <button type="button" data-v="AUCTION">Auctions</button>
+          <button type="button" data-v="FIXED_PRICE,AUCTION">Both</button>
+        </div>
+
+        <label class="fl">Condition <span class="opt">optional</span></label>
+        <div class="checks" id="sf-cond">
+          <label><input type="checkbox" value="1000"> New</label>
+          <label><input type="checkbox" value="1500"> Open box</label>
+          <label><input type="checkbox" value="3000,4000,5000,6000"> Used</label>
+          <label><input type="checkbox" value="7000"> For parts</label>
+        </div>
+
+        <div class="checks spaced">
+          <label><input type="checkbox" id="sf-notify" checked> Notify me</label>
+          <label><input type="checkbox" id="sf-us" checked> US only</label>
+          <label><input type="checkbox" id="sf-active" checked> Active</label>
+        </div>
+
+        <label class="fl" for="sf-label">Name <span class="opt">optional</span></label>
+        <input id="sf-label" placeholder="Named automatically if left blank">
+
+        <label class="fl" for="sf-value">
+          Typical value <span class="opt tag-pro" id="sf-value-tag">Pro</span>
+        </label>
+        <input id="sf-value" type="number" min="0" step="0.01" placeholder="e.g. 250">
+        <p class="hint" id="sf-value-hint">
+          What one of these is normally worth to you. Listings get flagged by how
+          far under it they are.
+        </p>
+
+        <div id="sf-preview" class="preview" hidden></div>
+
+        <div class="two">
+          <button type="button" id="sf-test" class="ghost">Test search</button>
+          <button type="submit" class="go">Save</button>
+        </div>
+        <button type="button" id="sf-cancel" class="ghost wide">Cancel</button>
+        <button type="button" id="sf-delete" class="danger wide" hidden>Delete this search</button>
+      </form>
+
+      <div id="feed"></div>
+      <div id="feed-empty" class="empty">Pull the refresh button to load listings from your saved searches.</div>
+    </section>
+
+    <section id="tab-auctions" class="pane">
+      <div id="auctions"></div>
+      <div id="auctions-empty" class="empty">Auction listings from your searches appear here with live countdowns.</div>
+    </section>
+
+    <section id="tab-saved" class="pane">
+      <div id="saved"></div>
+      <div id="saved-empty" class="empty">Listings you save appear here, synced with the extension.</div>
+    </section>
+
+    <section id="tab-portfolio" class="pane">
+      <div class="stats">
+        <div class="stat"><div class="v" id="pf-inv">$0</div><div class="l">Invested</div></div>
+        <div class="stat"><div class="v" id="pf-pl">$0</div><div class="l">Realized</div></div>
+        <div class="stat"><div class="v" id="pf-open">0</div><div class="l">Open</div></div>
+      </div>
+      <div id="pf"></div>
+      <div id="pf-empty" class="empty">Purchases you track in the extension show up here.</div>
+    </section>
+  </main>
+
+  <nav>
+    <button class="tab on" data-tab="feed">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Feed
+    </button>
+    <button class="tab" data-tab="auctions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>Auctions
+    </button>
+    <button class="tab" data-tab="saved">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z"/></svg>Saved
+    </button>
+    <button class="tab" data-tab="portfolio">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17l6-6 4 4 7-7M21 8V4h-4"/></svg>Portfolio
+    </button>
+  </nav>
+</div>
+
+<div id="toast" hidden></div>
+
+<script>
+// ── Config (anon key is public by design — RLS + the edge-function paywall gate access) ──
+const SUPABASE_URL = "https://kiynmpyqwjcpsurhgibl.supabase.co";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpeW5tcHlxd2pjcHN1cmhnaWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MDI1NTUsImV4cCI6MjA5OTQ3ODU1NX0._l35WagMXknzfp84CzAnmwqnnPzJI-gRN_iT3RbQLQ8";
+const AUTH = SUPABASE_URL + "/auth/v1", REST = SUPABASE_URL + "/rest/v1", FN = SUPABASE_URL + "/functions/v1";
+const H = { "Content-Type": "application/json", apikey: ANON };
+
+const $ = (id) => document.getElementById(id);
+const state = { session: null, sub: null, limits: [], searches: [], feed: [], saved: [],
+                savedBy: new Map(), portfolio: [], filter: "" };
+
+// ── Session ───────────────────────────────────────────────────────────────────
+const SKEY = "fw_session";
+function loadSession() {
+  try { return JSON.parse(localStorage.getItem(SKEY)); } catch { return null; }
+}
+function saveSession(j) {
+  if (!j) return localStorage.removeItem(SKEY);
+  localStorage.setItem(SKEY, JSON.stringify({
+    access_token: j.access_token, refresh_token: j.refresh_token,
+    expires_at: j.expires_at ?? Math.floor(Date.now() / 1000) + (j.expires_in ?? 3600),
+    user: { id: j.user?.id, email: j.user?.email },
+  }));
+}
+
+let refreshing = null; // single-flight: refresh tokens are one-time use
+async function token() {
+  const s = state.session;
+  if (!s) throw new Error("signed_out");
+  if (s.expires_at - 60 > Date.now() / 1000) return s.access_token;
+  refreshing ??= (async () => {
+    const r = await fetch(`${AUTH}/token?grant_type=refresh_token`, {
+      method: "POST", headers: H, body: JSON.stringify({ refresh_token: s.refresh_token }),
+    });
+    if (!r.ok) { saveSession(null); state.session = null; throw new Error("session_expired"); }
+    const j = await r.json();
+    saveSession(j); state.session = loadSession();
+    return j.access_token;
+  })().finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+async function api(url, opts = {}) {
+  const t = await token();
+  const res = await fetch(url, {
+    ...opts, headers: { ...H, ...opts.headers, Authorization: `Bearer ${t}` },
+  });
+  if (res.status === 401) { signOut(); throw new Error("Signed out — please sign in again."); }
+  return res;
+}
+async function rest(path, opts) {
+  const r = await api(REST + path, opts);
+  if (!r.ok) throw new Error(await r.text());
+  // PostgREST answers 201/204 with an empty body unless asked for a
+  // representation, so parse defensively rather than assuming JSON.
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// ── Search-query mini-syntax ──────────────────────────────────────────────────
+// Mirrors extension/lib/query.js. `keywords` stores everything, so the three
+// form fields need no extra columns:
+//   words → must match · (a,b,c) → any of · -word → exclude (filtered by us,
+//   because eBay's Browse API has no NOT operator).
+function parseQuery(keywords = "") {
+  let value = null;
+  const noVal = String(keywords ?? "").replace(/(?:^|\s)value:(\d+(?:\.\d+)?)/i, (_, v) => {
+    const n = Number(v); if (isFinite(n) && n > 0) value = n; return " ";
+  });
+  const exclude = [];
+  const noNots = noVal.replace(/-(?:"([^"]*)"|(\S+))/g, (_, q, b) => {
+    const w = (q ?? b ?? "").trim(); if (w) exclude.push(w); return " ";
+  });
+  let anyOf = [];
+  const noAny = noNots.replace(/\(([^)]*)\)/, (_, inner) => {
+    anyOf = inner.split(",").map((s) => s.trim()).filter(Boolean); return " ";
+  });
+  return { base: noAny.replace(/\s+/g, " ").trim(), anyOf, exclude, value };
+}
+function composeQuery({ base = "", anyOf = [], exclude = [], value = null } = {}) {
+  const parts = [String(base).trim()];
+  const any = anyOf.map((s) => s.trim()).filter(Boolean);
+  if (any.length) parts.push(`(${any.join(",")})`);
+  for (const w of exclude.map((s) => s.trim()).filter(Boolean)) {
+    parts.push(/\s/.test(w) ? `-"${w}"` : `-${w}`);
+  }
+  const v = Number(value);
+  if (isFinite(v) && v > 0) parts.push(`value:${v}`);
+  return parts.filter(Boolean).join(" ").trim();
+}
+function targetStanding(price, value) {
+  const p = Number(price), v = Number(value);
+  if (!isFinite(p) || p <= 0 || !isFinite(v) || v <= 0) return null;
+  const pct = Math.round((p / v) * 100);
+  return { pct, tone: pct <= 70 ? "good" : pct <= 100 ? "mid" : "bad" };
+}
+function ebayQuery(keywords) {
+  const { base, anyOf } = parseQuery(keywords);
+  return composeQuery({ base, anyOf });
+}
+function applyExclusions(keywords, items) {
+  const { exclude } = parseQuery(keywords);
+  if (!exclude.length) return items;
+  const bad = exclude.map((w) => w.toLowerCase());
+  return items.filter((it) =>
+    !bad.some((w) => String(it?.title ?? "").toLowerCase().includes(w)));
+}
+// Deal-score comparables — see extension/lib/query.js for the reasoning.
+// A raw eBay title is keyword-stuffed, so using it as the comp query gave every
+// listing a different comp set and made scores look arbitrary.
+const COMP_NOISE = new Set(`
+lot lots bundle set pack pcs pieces piece with and for the of in to
+new used open box sealed mint near excellent very good acceptable condition
+tested works working perfect rare htf vintage authentic genuine original
+oem official free shipping fast ship ships bonus extra plus complete cib loose
+read please see description look wow nice awesome great deal sale price obo
+best offer nib nwt bnib model system unit included includes incl brand
+`.trim().split(/\s+/));
+function compQuery(title, max = 5) {
+  const out = [];
+  for (const t of String(title ?? "").toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/\s+/)) {
+    if (!t || t.length < 2 || COMP_NOISE.has(t) || out.includes(t)) continue;
+    out.push(t);
+    if (out.length >= max) break;
+  }
+  return out.join(" ");
+}
+function conditionIdsFor(condition) {
+  const c = String(condition ?? "").toLowerCase();
+  if (!c) return undefined;
+  if (c.includes("part") || c.includes("not working")) return ["7000"];
+  if (c.includes("refurb")) return ["2000", "2010", "2020", "2030", "2500"];
+  if (c.includes("new") || c.includes("open box")) return ["1000", "1500"];
+  if (c.includes("used") || c.includes("good") || c.includes("acceptable")) {
+    return ["3000", "4000", "5000", "6000"];
+  }
+  return undefined;
+}
+
+function describeQuery({ base, anyOf, exclude }) {
+  const bits = [];
+  if (base) bits.push(`must contain “${base}”`);
+  if (anyOf?.length) bits.push(`plus any of ${anyOf.map((w) => `“${w}”`).join(", ")}`);
+  if (exclude?.length) bits.push(`but never ${exclude.map((w) => `“${w}”`).join(", ")}`);
+  return bits.length ? bits.join(", ") : "everything (no words yet)";
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const money = (v) => v == null ? "—"
+  : Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
+function ago(ts) {
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  return s < 60 ? `${s | 0}s ago` : s < 3600 ? `${s / 60 | 0}m ago`
+       : s < 86400 ? `${s / 3600 | 0}h ago` : `${s / 86400 | 0}d ago`;
+}
+function countdown(end) {
+  const ms = new Date(end).getTime() - Date.now();
+  if (ms <= 0) return "ended";
+  const s = ms / 1000 | 0, d = s / 86400 | 0, h = (s % 86400) / 3600 | 0,
+        m = (s % 3600) / 60 | 0, sec = s % 60;
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m ${sec}s`;
+}
+let toastT;
+function toast(msg) {
+  const el = $("toast");
+  el.textContent = msg; el.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2400);
+}
+function allows(feature) {
+  const l = state.limits.find((x) => x.tier === state.sub?.tier);
+  return l ? !!l[feature] : false;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+async function boot() {
+  state.session = loadSession();
+  if (!state.session) return showGate();
+  $("gate").hidden = true; $("app").hidden = false;
+
+  try {
+    const [subs, limits] = await Promise.all([
+      rest("/subscriptions?select=tier,status,trial_ends_at,current_period_end"),
+      rest("/plan_limits?select=*"),
+    ]);
+    state.sub = subs?.[0] ?? null; state.limits = limits ?? [];
+    if (state.sub) {
+      $("plan").hidden = false;
+      $("plan").textContent = state.sub.status === "canceled" ? "expired" : state.sub.tier;
+    }
+  } catch (e) { if (!state.session) return; console.warn(e); }
+
+  restoreFeed();
+  await Promise.all([loadSearches(), loadSaved()]);
+  renderAll();
+  if (!state.feed.length) refreshFeed();
+}
+
+function showGate() { $("gate").hidden = false; $("app").hidden = true; }
+function signOut() {
+  saveSession(null); state.session = null;
+  localStorage.removeItem("fw_feed_cache");
+  showGate();
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+async function loadSearches() {
+  try { state.searches = await rest("/saved_searches?select=*&order=created_at.asc"); }
+  catch { state.searches = []; }
+}
+async function loadSaved() {
+  try {
+    state.saved = await rest("/saved_listings?select=*&order=saved_at.desc");
+    state.savedBy = new Map(state.saved.map((s) => [s.item_id, s]));
+  } catch { state.saved = []; }
+}
+async function loadPortfolio() {
+  try { state.portfolio = await rest("/portfolio_entries?select=*&order=bought_at.desc"); }
+  catch { state.portfolio = []; }
+}
+
+function restoreFeed() {
+  try {
+    const c = JSON.parse(localStorage.getItem("fw_feed_cache"));
+    if (Array.isArray(c)) state.feed = c;
+  } catch {}
+}
+function cacheFeed() {
+  try { localStorage.setItem("fw_feed_cache", JSON.stringify(state.feed.slice(0, 120))); }
+  catch {}
+}
+
+let busy = false, queued = false;
+async function refreshFeed() {
+  // Don't drop a refresh that lands mid-flight — saving a search during the
+  // opening refresh would otherwise never fetch it, so the new search looks
+  // broken until the next manual refresh. Remember it and run once more.
+  if (busy) { queued = true; return; }
+  const active = state.searches.filter((s) => s.active);
+  if (!active.length) { toast("No active saved searches yet"); return; }
+  busy = true;
+  $("refresh").querySelector("svg").classList.add("spin");
+
+  const known = new Map(state.feed.map((f) => [f.itemId, f]));
+  let added = 0, failed = 0, lapsed = false, quota = false;
+  for (const s of active) {
+    try {
+      const r = await api(`${FN}/ebay-search`, {
+        method: "POST",
+        body: JSON.stringify({
+          searchId: s.id,
+          keywords: ebayQuery(s.keywords), // "-word" exclusions aren't eBay syntax
+          priceMin: s.price_min, priceMax: s.price_max,
+          buyingOptions: s.buying_options, usOnly: s.us_only,
+          categoryIds: s.category_ids ?? undefined,
+          conditionIds: s.condition_ids ?? undefined,
+          blockedSellers: s.blocked_sellers,
+          sort: (s.buying_options ?? []).includes("AUCTION") ? "endingSoonest" : "newlyListed",
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        if (j.error === "plan_upgrade_required") continue; // e.g. auctions on Standard
+        if (r.status === 402) { lapsed = true; break; }
+        if (j.error === "daily_quota_exceeded") { quota = true; break; }
+        throw new Error(j.error ?? `error ${r.status}`);
+      }
+      const fresh = new Set(j.newItems ?? []);
+      for (const it of applyExclusions(s.keywords, j.items ?? [])) {
+        if (known.has(it.itemId)) continue;
+        const row = { ...it, searchId: s.id, searchLabel: s.label,
+                      isNew: fresh.has(it.itemId), fetchedAt: Date.now() };
+        known.set(it.itemId, row); state.feed.unshift(row); added++;
+      }
+    } catch (e) { failed++; console.warn(s.label, e); }
+  }
+
+  state.feed = state.feed.slice(0, 200);
+  cacheFeed(); renderAll();
+  busy = false;
+  $("refresh").querySelector("svg").classList.remove("spin");
+  if (queued) { queued = false; return refreshFeed(); }
+  toast(lapsed ? "Subscription expired — renew to keep monitoring"
+        : quota ? "Daily search limit reached — resets at midnight"
+        : failed && !added ? "Couldn't reach eBay — try again"
+        : added ? `${added} new listing${added > 1 ? "s" : ""}` : "No new listings");
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll() { renderChips(); renderFeed(); renderAuctions(); renderSaved(); }
+
+function renderChips() {
+  const wrap = $("chips");
+  wrap.textContent = "";
+  // Never leave the feed filtered by a search that no longer exists — it
+  // would silently render empty with no chip highlighted to explain why.
+  if (state.filter && !state.searches.some((s) => s.id === state.filter)) {
+    state.filter = "";
+  }
+  const mk = (label, val) => {
+    const b = document.createElement("button");
+    b.className = "schip" + (state.filter === val ? " on" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      // Tapping the already-selected search opens it for editing; otherwise filter.
+      if (val && state.filter === val) {
+        openForm(state.searches.find((s) => s.id === val));
+      } else {
+        state.filter = val; renderChips(); renderFeed();
+      }
+    });
+    wrap.append(b);
+  };
+  mk("All", "");
+  for (const s of state.searches) mk(s.label, s.id);
+}
+
+// ── Search editor ─────────────────────────────────────────────────────────────
+const csv = (v) => v.split(",").map((x) => x.trim()).filter(Boolean);
+
+function setTypeSeg(buyingOptions) {
+  const want = (buyingOptions?.length ? buyingOptions : ["FIXED_PRICE"]).slice().sort().join(",");
+  const btns = [...$("sf-type").querySelectorAll("button")];
+  const chosen = btns.find((b) => b.dataset.v.split(",").slice().sort().join(",") === want) ?? btns[0];
+  for (const b of btns) b.classList.toggle("on", b === chosen);
+}
+const getTypeSeg = () =>
+  ($("sf-type").querySelector("button.on")?.dataset.v ?? "FIXED_PRICE").split(",");
+
+function setConditions(ids) {
+  const have = new Set((ids ?? []).map(String));
+  for (const cb of $("sf-cond").querySelectorAll("input")) {
+    cb.checked = cb.value.split(",").some((v) => have.has(v));
+  }
+}
+function getConditions() {
+  const out = [];
+  for (const cb of $("sf-cond").querySelectorAll("input")) {
+    if (cb.checked) out.push(...cb.value.split(","));
+  }
+  return out;
+}
+
+function openForm(s) {
+  const q = parseQuery(s?.keywords ?? "");
+  $("sform").hidden = false;
+  $("sf-preview").hidden = true;
+  $("sf-id").value = s?.id ?? "";
+  $("sf-label").value = s?.label ?? "";
+  $("sf-keywords").value = q.base;
+  $("sf-any").value = q.anyOf.join(", ");
+  $("sf-not").value = q.exclude.join(", ");
+  $("sf-min").value = s?.price_min ?? "";
+  $("sf-max").value = s?.price_max ?? "";
+  setTypeSeg(s?.buying_options);
+  setConditions(s?.condition_ids);
+  $("sf-notify").checked = s?.notify ?? true;
+  $("sf-us").checked = s?.us_only ?? true;
+  $("sf-active").checked = s?.active ?? true;
+  $("sf-delete").hidden = !s;
+  // Reference pricing is a paid feature; the gate is packaging, not security —
+  // the value is evaluated locally and costs the server nothing.
+  const pro = allows("deal_score_enabled");
+  $("sf-value").value = q.value ?? "";
+  $("sf-value").disabled = !pro;
+  $("sf-value-tag").hidden = pro;
+  $("sf-value-hint").textContent = pro
+    ? "What one of these is normally worth to you. Listings get flagged by how far under it they are."
+    : "Upgrade to Pro to flag listings against a value you set.";
+  $("sform").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function readForm() {
+  const base = $("sf-keywords").value.trim();
+  const anyOf = csv($("sf-any").value);
+  const exclude = csv($("sf-not").value);
+  const lim = state.limits.find((l) => l.tier === state.sub?.tier);
+  const conds = getConditions();
+  return {
+    label: $("sf-label").value.trim() || (base || anyOf[0] || "New search").slice(0, 40),
+    keywords: composeQuery({
+      base, anyOf, exclude,
+      // Keep any existing value when the field is locked, so editing on a
+      // lapsed plan doesn't silently discard it.
+      value: allows("deal_score_enabled")
+        ? ($("sf-value").value ? Number($("sf-value").value) : null)
+        : parseQuery(state.searches.find((s) => s.id === $("sf-id").value)?.keywords).value,
+    }),
+    price_min: $("sf-min").value ? Number($("sf-min").value) : null,
+    price_max: $("sf-max").value ? Number($("sf-max").value) : null,
+    buying_options: getTypeSeg(),
+    condition_ids: conds.length ? conds : null,
+    poll_seconds: lim?.min_poll_seconds ?? 60,
+    us_only: $("sf-us").checked,
+    notify: $("sf-notify").checked,
+    active: $("sf-active").checked,
+  };
+}
+
+async function testForm() {
+  const body = readForm();
+  const box = $("sf-preview"), btn = $("sf-test");
+  if (!body.keywords) return toast("Type what you're looking for first");
+  btn.disabled = true; btn.textContent = "Testing…";
+  box.hidden = false; box.className = "preview"; box.textContent = "Searching eBay…";
+  try {
+    const r = await api(`${FN}/ebay-search`, {
+      method: "POST",
+      body: JSON.stringify({
+        keywords: ebayQuery(body.keywords),
+        priceMin: body.price_min, priceMax: body.price_max,
+        buyingOptions: body.buying_options, usOnly: body.us_only,
+        conditionIds: body.condition_ids ?? undefined, limit: 10,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error ?? `error ${r.status}`);
+    const items = applyExclusions(body.keywords, j.items ?? []);
+    box.textContent = "";
+    const head = document.createElement("div");
+    head.className = "pv-head";
+    head.textContent = items.length
+      ? `Found ${j.total ?? items.length} listings — newest few:`
+      : "No listings matched. Try fewer words.";
+    box.append(head);
+    for (const it of items.slice(0, 3)) {
+      const d = document.createElement("div");
+      d.className = "pv-item";
+      d.textContent = `• ${money(it.currentBid ?? it.price)} — ${(it.title ?? "").slice(0, 60)}`;
+      box.append(d);
+    }
+    const why = document.createElement("div");
+    why.className = "pv-item"; why.style.marginTop = "6px";
+    why.textContent = describeQuery(parseQuery(body.keywords));
+    box.append(why);
+  } catch (e) {
+    box.className = "preview bad";
+    box.textContent = String(e.message) === "plan_upgrade_required"
+      ? "That needs a higher plan (auctions are Pro)." : `Couldn't test: ${e.message}`;
+  } finally { btn.disabled = false; btn.textContent = "Test search"; }
+}
+
+async function submitForm(ev) {
+  ev.preventDefault();
+  const id = $("sf-id").value;
+  const lim = state.limits.find((l) => l.tier === state.sub?.tier);
+  if (!id && lim && state.searches.length >= lim.max_saved_searches) {
+    return toast(`Plan limit: ${lim.max_saved_searches} searches`);
+  }
+  const body = readForm();
+  try {
+    if (id) {
+      await rest(`/saved_searches?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(body) });
+    } else {
+      await rest("/saved_searches", { method: "POST", body: JSON.stringify(body) });
+      state.filter = ""; // show everything, so the new search isn't hidden
+    }
+    $("sform").hidden = true;
+    await loadSearches();
+    renderChips();
+    renderFeed();
+    toast(id ? "Search updated" : "Search created");
+    refreshFeed();
+  } catch (e) { toast("Couldn't save — check your words and try again"); }
+}
+
+async function deleteForm() {
+  const id = $("sf-id").value;
+  if (!id || !confirm("Delete this saved search?")) return;
+  try {
+    await rest(`/saved_searches?id=eq.${id}`, { method: "DELETE" });
+    $("sform").hidden = true;
+    if (state.filter === id) state.filter = "";
+    await loadSearches();
+    renderChips(); renderFeed();
+    toast("Search deleted");
+  } catch { toast("Couldn't delete"); }
+}
+
+function card(item, opts = {}) {
+  const el = document.createElement("div");
+  el.className = "card";
+
+  if (item.image) {
+    const img = document.createElement("img");
+    img.src = item.image; img.alt = ""; img.loading = "lazy";
+    el.append(img);
+  }
+  const body = document.createElement("div");
+  body.className = "cbody";
+  el.append(body);
+
+  if (item.isNew) {
+    const b = document.createElement("span");
+    b.className = "badge"; b.textContent = "NEW";
+    body.append(b);
+  }
+  const t = document.createElement("div");
+  t.className = "ctitle"; t.textContent = item.title ?? "(untitled)";
+  body.append(t);
+
+  const meta = document.createElement("div");
+  meta.className = "cmeta";
+  const p = document.createElement("span");
+  p.className = "price";
+  p.textContent = item.currentBid != null ? `${money(item.currentBid)} bid` : money(item.price);
+  meta.append(p);
+  if (item.seller) {
+    const s = document.createElement("span");
+    s.className = "muted"; s.style.fontSize = "12px"; s.textContent = item.seller;
+    meta.append(s);
+  }
+  if (opts.auction && item.endTime) {
+    const cd = document.createElement("span");
+    cd.className = "cd"; cd.dataset.end = item.endTime; cd.textContent = "⏱ " + countdown(item.endTime);
+    meta.append(cd);
+  }
+  // How this listing stands against the search's reference value, if set.
+  const owning = state.searches.find((s) => s.id === item.searchId);
+  const stand = targetStanding(
+    item.currentBid ?? item.price,
+    owning ? parseQuery(owning.keywords).value : null,
+  );
+  if (stand) {
+    const chip = document.createElement("span");
+    chip.className = `c-target ${stand.tone}`;
+    chip.textContent = `${stand.pct}% of target`;
+    meta.append(chip);
+  }
+  body.append(meta);
+
+  const sub = document.createElement("div");
+  sub.className = "csub";
+  sub.textContent = opts.sub ?? [item.searchLabel, item.fetchedAt ? ago(item.fetchedAt) : null]
+    .filter(Boolean).join(" · ");
+  body.append(sub);
+
+  const acts = document.createElement("div");
+  acts.className = "cacts";
+  const open = document.createElement("a");
+  open.className = "primary"; open.textContent = "Open";
+  open.href = item.url ?? "#"; open.target = "_blank"; open.rel = "noopener";
+  acts.append(open);
+
+  if (!opts.noSave) {
+    const sv = document.createElement("button");
+    const on = state.savedBy.has(item.itemId);
+    sv.className = on ? "on" : ""; sv.textContent = on ? "✓ Saved" : "Save";
+    sv.addEventListener("click", () => toggleSave(item, sv));
+    acts.append(sv);
+  }
+  if (!opts.noScore && allows("deal_score_enabled") && (item.price ?? item.currentBid)) {
+    const sc = document.createElement("button");
+    sc.textContent = "Score";
+    sc.addEventListener("click", () => score(item, body, sc));
+    acts.append(sc);
+  }
+  body.append(acts);
+  return el;
+}
+
+function renderFeed() {
+  const list = $("feed");
+  list.textContent = "";
+  const items = state.feed.filter((i) =>
+    (!state.filter || i.searchId === state.filter) &&
+    !(i.buyingOptions ?? []).includes("AUCTION"));
+  $("feed-empty").hidden = items.length > 0;
+  const frag = document.createDocumentFragment();
+  for (const i of items.slice(0, 80)) frag.append(card(i));
+  list.append(frag);
+}
+
+function renderAuctions() {
+  const list = $("auctions");
+  list.textContent = "";
+  const items = state.feed
+    .filter((i) => (i.buyingOptions ?? []).includes("AUCTION") && i.endTime)
+    .sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
+  $("auctions-empty").hidden = items.length > 0;
+  const frag = document.createDocumentFragment();
+  for (const i of items.slice(0, 60)) frag.append(card(i, { auction: true }));
+  list.append(frag);
+}
+
+function renderSaved() {
+  const list = $("saved");
+  list.textContent = "";
+  $("saved-empty").hidden = state.saved.length > 0;
+  const frag = document.createDocumentFragment();
+  for (const s of state.saved) {
+    frag.append(card(
+      { itemId: s.item_id, title: s.title, price: s.price, image: s.image_url,
+        url: s.item_url, seller: s.seller },
+      { sub: `saved ${ago(new Date(s.saved_at).getTime())}` },
+    ));
+  }
+  list.append(frag);
+}
+
+function renderPortfolio() {
+  const list = $("pf");
+  list.textContent = "";
+  $("pf-empty").hidden = state.portfolio.length > 0;
+  let invested = 0, realized = 0, open = 0;
+  for (const e of state.portfolio) {
+    const cost = (+e.buy_price || 0) + (+e.fees || 0) + (+e.shipping || 0);
+    if (e.sold_price != null) realized += +e.sold_price - cost;
+    else { invested += cost; open++; }
+  }
+  $("pf-inv").textContent = money(invested);
+  const pl = $("pf-pl");
+  pl.textContent = (realized > 0 ? "+" : realized < 0 ? "−" : "") + money(Math.abs(realized));
+  pl.className = "v " + (realized > 0 ? "pos" : realized < 0 ? "neg" : "");
+  $("pf-open").textContent = String(open);
+
+  const frag = document.createDocumentFragment();
+  for (const e of state.portfolio) {
+    const cost = (+e.buy_price || 0) + (+e.fees || 0) + (+e.shipping || 0);
+    const pnl = e.sold_price != null ? +e.sold_price - cost : null;
+    frag.append(card(
+      { itemId: e.item_id, title: e.title, price: e.buy_price, image: e.image_url, url: e.item_url },
+      { noSave: true, noScore: true,
+        sub: pnl == null ? `open · cost ${money(cost)}`
+             : `sold ${money(e.sold_price)} · ${pnl >= 0 ? "+" : "−"}${money(Math.abs(pnl))}` },
+    ));
+  }
+  list.append(frag);
+}
+
+// Live countdowns
+setInterval(() => {
+  for (const el of document.querySelectorAll(".cd")) {
+    const t = countdown(el.dataset.end);
+    el.textContent = t === "ended" ? "ended" : "⏱ " + t;
+  }
+}, 1000);
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+async function toggleSave(item, btn) {
+  try {
+    const existing = state.savedBy.get(item.itemId);
+    if (existing) {
+      await rest(`/saved_listings?id=eq.${existing.id}`, { method: "DELETE" });
+      toast("Removed");
+    } else {
+      await rest("/saved_listings?on_conflict=user_id,item_id", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify({
+          item_id: item.itemId, title: item.title, price: item.price,
+          image_url: item.image, item_url: item.url, seller: item.seller,
+        }),
+      });
+      toast("Saved");
+    }
+    await loadSaved();
+    const on = state.savedBy.has(item.itemId);
+    btn.className = on ? "on" : ""; btn.textContent = on ? "✓ Saved" : "Save";
+    renderSaved();
+  } catch (e) { toast("Couldn't save — try again"); }
+}
+
+async function score(item, body, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const isAuction = item.currentBid != null ||
+      (item.buyingOptions ?? []).includes("AUCTION");
+    const price = item.currentBid ?? item.price;
+    const r = await api(`${FN}/deal-score`, {
+      method: "POST",
+      body: JSON.stringify({
+        keywords: compQuery(item.title),
+        price,
+        conditionIds: conditionIdsFor(item.condition),
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error ?? "failed");
+    const el = document.createElement("div");
+    el.className = "score " + (j.score == null || isAuction ? ""
+      : ["steal", "great"].includes(j.verdict) ? "good"
+      : j.verdict === "fair" ? "" : "bad");
+    el.textContent = j.score == null
+      ? (j.sampleSize ? `only ${j.sampleSize} comps` : "no comps")
+      : isAuction
+        ? `bid is ${Math.round((price / j.median) * 100)}% of BIN median ${money(j.median)}`
+        : `${j.verdict.replace("_", " ")} · median ${money(j.median)} (${j.sampleSize} comps)`;
+    body.insertBefore(el, body.querySelector(".cacts"));
+    btn.remove();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "Score";
+    toast(String(e.message) === "plan_upgrade_required" ? "Deal scores need Pro" : "Score unavailable");
+  }
+}
+
+// ── Wiring ────────────────────────────────────────────────────────────────────
+$("signin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = e.target.querySelector("button"), err = $("err");
+  btn.disabled = true; err.hidden = true;
+  try {
+    const r = await fetch(`${AUTH}/token?grant_type=password`, {
+      method: "POST", headers: H,
+      body: JSON.stringify({ email: $("email").value.trim(), password: $("pass").value }),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.access_token) throw new Error(j.msg || j.error_description || "Sign-in failed");
+    saveSession(j); state.session = loadSession();
+    $("pass").value = "";
+    await boot();
+  } catch (ex) {
+    err.hidden = false; err.textContent = ex.message;
+  } finally { btn.disabled = false; }
+});
+
+$("refresh").addEventListener("click", refreshFeed);
+$("signout").addEventListener("click", signOut);
+$("btn-add").addEventListener("click", () => openForm(null));
+$("sf-cancel").addEventListener("click", () => ($("sform").hidden = true));
+$("sf-test").addEventListener("click", testForm);
+$("sf-delete").addEventListener("click", deleteForm);
+$("sform").addEventListener("submit", submitForm);
+$("sf-type").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  for (const x of $("sf-type").querySelectorAll("button")) x.classList.toggle("on", x === b);
+});
+
+for (const t of document.querySelectorAll(".tab")) {
+  t.addEventListener("click", async () => {
+    for (const x of document.querySelectorAll(".tab")) x.classList.toggle("on", x === t);
+    for (const p of document.querySelectorAll(".pane"))
+      p.classList.toggle("on", p.id === `tab-${t.dataset.tab}`);
+    window.scrollTo(0, 0);
+    if (t.dataset.tab === "portfolio") { await loadPortfolio(); renderPortfolio(); }
+    if (t.dataset.tab === "saved") { await loadSaved(); renderSaved(); }
+  });
+}
+
+// Refresh when the app returns to the foreground after a while.
+let hidAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { hidAt = Date.now(); return; }
+  if (state.session && hidAt && Date.now() - hidAt > 120000) refreshFeed();
+});
+
+boot();
+</script>
+</body>
+</html>

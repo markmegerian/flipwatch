@@ -48,41 +48,81 @@
 
     <form id="search-form" hidden>
       <input type="hidden" id="sf-id">
-      <div class="row">
-        <input id="sf-label" placeholder="Label (e.g. Charizard PSA lots)" required>
-      </div>
-      <div class="row">
-        <input id="sf-keywords" placeholder="eBay keywords" required>
-      </div>
+
+      <label class="fl" for="sf-keywords">What are you looking for?</label>
+      <input id="sf-keywords" placeholder="vintage pokemon holo" required>
+      <p class="hint">Words that must appear in every listing.</p>
+
+      <label class="fl" for="sf-any">Any of these <span class="opt">optional</span></label>
+      <input id="sf-any" placeholder="base set, fossil, jungle, neo">
+      <p class="hint">Separate with commas. A listing matches if it has <b>any one</b> of them.</p>
+
+      <label class="fl" for="sf-not">None of these <span class="opt">optional</span></label>
+      <input id="sf-not" placeholder="damaged, reprint, proxy">
+      <p class="hint">Hides listings whose title contains any of these.</p>
+
+      <label class="fl">Price</label>
       <div class="row two">
-        <input id="sf-min" type="number" min="0" step="0.01" placeholder="Min $">
-        <input id="sf-max" type="number" min="0" step="0.01" placeholder="Max $">
+        <input id="sf-min" type="number" min="0" step="0.01" placeholder="No minimum">
+        <input id="sf-max" type="number" min="0" step="0.01" placeholder="No maximum">
       </div>
-      <div class="row two">
-        <select id="sf-type">
-          <option value="FIXED_PRICE">Buy It Now</option>
-          <option value="AUCTION">Auctions</option>
-          <option value="FIXED_PRICE,AUCTION">Both</option>
-        </select>
-        <select id="sf-poll">
-          <option value="15">every 15s (Pro)</option>
-          <option value="30">every 30s</option>
-          <option value="60" selected>every 60s</option>
-          <option value="300">every 5 min</option>
-        </select>
+
+      <label class="fl">Listing type</label>
+      <div class="seg" id="sf-type">
+        <button type="button" data-v="FIXED_PRICE">Buy It Now</button>
+        <button type="button" data-v="AUCTION">Auctions</button>
+        <button type="button" data-v="FIXED_PRICE,AUCTION">Both</button>
       </div>
-      <div class="row checks">
-        <label><input type="checkbox" id="sf-us" checked> US only</label>
-        <label><input type="checkbox" id="sf-notify" checked> Notify</label>
+
+      <label class="fl">Condition <span class="opt">optional</span></label>
+      <div class="row checks" id="sf-cond">
+        <label><input type="checkbox" value="1000"> New</label>
+        <label><input type="checkbox" value="1500"> Open box</label>
+        <label><input type="checkbox" value="3000,4000,5000,6000"> Used</label>
+        <label><input type="checkbox" value="7000"> For parts</label>
+      </div>
+      <p class="hint">Leave all unticked for any condition.</p>
+
+      <label class="fl" for="sf-poll">Check for new listings</label>
+      <select id="sf-poll">
+        <option value="15">as fast as my plan allows</option>
+        <option value="30">every 30 seconds</option>
+        <option value="60" selected>every minute</option>
+        <option value="300">every 5 minutes</option>
+      </select>
+
+      <div class="row checks spaced">
+        <label><input type="checkbox" id="sf-notify" checked> Notify me</label>
+        <label><input type="checkbox" id="sf-us" checked> US sellers only</label>
         <label><input type="checkbox" id="sf-active" checked> Active</label>
       </div>
-      <div class="row">
-        <input id="sf-blocked" placeholder="Blocked sellers (comma-separated)">
-      </div>
+
+      <label class="fl" for="sf-label">Name this search <span class="opt">optional</span></label>
+      <input id="sf-label" placeholder="Named automatically if you leave this blank">
+
+      <details class="adv">
+        <summary>Advanced</summary>
+
+        <label class="fl" for="sf-value">
+          Typical value <span class="opt tag-pro" id="sf-value-tag">Pro</span>
+        </label>
+        <input id="sf-value" type="number" min="0" step="0.01" placeholder="e.g. 250">
+        <p class="hint" id="sf-value-hint">
+          What one of these is normally worth to you. Listings are then flagged
+          by how far under it they are.
+        </p>
+
+        <label class="fl" for="sf-blocked">Blocked sellers</label>
+        <input id="sf-blocked" placeholder="Comma-separated usernames">
+      </details>
+
+      <div id="sf-preview" class="preview" hidden></div>
+
       <div class="row two">
+        <button type="button" id="sf-test" class="secondary">Test search</button>
         <button type="submit" class="primary">Save search</button>
-        <button type="button" id="sf-cancel" class="secondary">Cancel</button>
       </div>
+      <button type="button" id="sf-cancel" class="secondary wide">Cancel</button>
       <button type="button" id="sf-delete" class="danger" hidden>Delete this search</button>
     </form>
 
