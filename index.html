@@ -620,7 +620,8 @@ async function refreshFeed() {
           categoryIds: s.category_ids ?? undefined,
           conditionIds: s.condition_ids ?? undefined,
           blockedSellers: s.blocked_sellers,
-          sort: (s.buying_options ?? []).includes("AUCTION") ? "endingSoonest" : "newlyListed",
+          // Always newest-first; the Auctions tab re-sorts by end time locally.
+          sort: "newlyListed",
         }),
       });
       const j = await r.json();
