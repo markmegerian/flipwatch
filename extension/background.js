@@ -6,6 +6,7 @@
 //      to place their bid. (No automated bidding — see docs/COMPLIANCE.md.)
 import { AuthError, PlanError, db, getSession, searchEbay } from "./lib/api.js";
 import { applyExclusions, ebayQuery } from "./lib/query.js";
+import { CLOSING_WINDOW_MS } from "./lib/config.js";
 
 const FEED_MAX = 200; // items kept in the local feed cache
 
@@ -97,6 +98,68 @@ async function pollSearch(searchId) {
     .map((id) => result.items.find((i) => i.itemId === id))
     .filter(Boolean);
   if (fresh.length) await notifyNewItems(search, fresh);
+
+  await pollClosingAuctions(search);
+}
+
+// ── Closing auctions ──────────────────────────────────────────────────────────
+// The main poll asks eBay for newly-listed items, so auctions arrive five to
+// seven days from closing and are evicted from the feed hundreds of times over
+// before they matter. Showing an auction in its final minutes therefore needs a
+// separate request sorted by soonest-ending.
+//
+// Deliberately without searchId: this must not touch the server-side seen-set
+// or raise "new listing" alerts for week-old auctions. Results live in their
+// own store so they are not subject to feed eviction.
+const CLOSING_POLL_MS = 60_000; // at most once a minute per search
+
+async function pollClosingAuctions(search) {
+  if (!(search.buying_options ?? []).includes("AUCTION")) return;
+
+  const now = Date.now();
+  const due = await withStorageLock(async () => {
+    const { fw_closing_polls = {} } = await chrome.storage.local.get("fw_closing_polls");
+    if (now - (fw_closing_polls[search.id] ?? 0) < CLOSING_POLL_MS) return false;
+    fw_closing_polls[search.id] = now;
+    await chrome.storage.local.set({ fw_closing_polls });
+    return true;
+  });
+  if (!due) return;
+
+  let res;
+  try {
+    res = await searchEbay({
+      keywords: ebayQuery(search.keywords),
+      priceMin: search.price_min,
+      priceMax: search.price_max,
+      buyingOptions: ["AUCTION"],
+      usOnly: search.us_only,
+      categoryIds: search.category_ids ?? undefined,
+      conditionIds: search.condition_ids ?? undefined,
+      blockedSellers: search.blocked_sellers,
+      sort: "endingSoonest",
+    });
+  } catch (e) {
+    console.warn(`closing poll ${search.label}:`, e.message);
+    return;
+  }
+
+  const cutoff = Date.now() + CLOSING_WINDOW_MS;
+  const closing = applyExclusions(search.keywords, res.items ?? [])
+    .filter((i) => i.endTime && new Date(i.endTime).getTime() <= cutoff);
+
+  await withStorageLock(async () => {
+    const { fw_closing = [] } = await chrome.storage.local.get("fw_closing");
+    const t = Date.now();
+    // Replace this search's entries, and drop anything already ended.
+    const others = fw_closing.filter((i) =>
+      i.searchId !== search.id && new Date(i.endTime).getTime() > t);
+    const mine = closing.map((i) => ({
+      ...i, searchId: search.id, searchLabel: search.label,
+    }));
+    await chrome.storage.local.set({ fw_closing: [...others, ...mine] });
+  });
+  chrome.runtime.sendMessage({ type: "feed-updated" }).catch(() => {});
 }
 
 // chrome.storage has no transactions: two polls finishing together interleave

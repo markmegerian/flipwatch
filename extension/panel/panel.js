@@ -1,5 +1,6 @@
 // Flipwatch side panel controller.
 import { AuthError, PlanError, db, dealScore, getSession, searchEbay } from "../lib/api.js";
+import { CLOSING_WINDOW_MS } from "../lib/config.js";
 import {
   applyExclusions, compQuery, composeQuery, conditionIdsFor, describeQuery,
   ebayQuery, parseQuery, targetStanding,
@@ -9,6 +10,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   searches: [],
   feed: [],
+  closing: [],
   saved: [],
   savedByItem: new Map(),
   snipes: [],
@@ -107,8 +109,11 @@ async function loadSearches() {
   try { state.searches = await db.listSearches(); } catch { state.searches = []; }
 }
 async function loadFeedFromCache() {
-  const { fw_feed = [] } = await chrome.storage.local.get("fw_feed");
+  const { fw_feed = [], fw_closing = [] } = await chrome.storage.local.get(
+    ["fw_feed", "fw_closing"],
+  );
   state.feed = fw_feed;
+  state.closing = fw_closing;
 }
 async function loadSaved() {
   try {
@@ -260,12 +265,20 @@ function renderAuctions() {
 
   if (!allowed) { $("auction-empty").style.display = "none"; return; }
 
-  const items = state.feed
-    .filter((i) => (i.buyingOptions ?? []).includes("AUCTION") && i.endTime)
-    .sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
+  // Only auctions actually closing: this is a "bid now" list. They come from
+  // their own store, because the newest-first feed never holds an auction long
+  // enough to reach its final minutes.
+  const now = Date.now();
+  const items = state.closing
+    .filter((i) => {
+      const left = new Date(i.endTime).getTime() - now;
+      return left > 0 && left <= CLOSING_WINDOW_MS;
+    })
+    .sort((a, b) => new Date(a.endTime) - new Date(b.endTime))
+    .slice(0, 20);
   $("auction-empty").style.display = items.length ? "none" : "block";
   const frag = document.createDocumentFragment();
-  for (const item of items.slice(0, 60)) frag.append(makeCard(item, { auction: true }));
+  for (const item of items) frag.append(makeCard(item, { auction: true }));
   list.append(frag);
   tickCountdowns();
 }
