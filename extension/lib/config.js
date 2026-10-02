@@ -7,3 +7,8 @@ export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 
 // Marketing site (checkout success/cancel pages live here too).
 export const SITE_URL = "https://example.com";
+
+// Auctions are only surfaced in their final stretch — the Auctions tab is a
+// "bid now" list, not a browse list. Polling is newest-first, so auctions are
+// fetched separately by soonest-ending to populate it.
+export const CLOSING_WINDOW_MS = 5 * 60 * 1000;

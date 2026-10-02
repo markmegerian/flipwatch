@@ -1,5 +1,6 @@
 // Flipwatch side panel controller.
 import { AuthError, PlanError, db, dealScore, getSession, searchEbay } from "../lib/api.js";
+import { CLOSING_WINDOW_MS } from "../lib/config.js";
 import {
   applyExclusions, compQuery, composeQuery, conditionIdsFor, describeQuery,
   ebayQuery, parseQuery, targetStanding,
@@ -9,6 +10,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   searches: [],
   feed: [],
+  closing: [],
   saved: [],
   savedByItem: new Map(),
   snipes: [],
@@ -109,6 +111,38 @@ async function loadSearches() {
 async function loadFeedFromCache() {
   const { fw_feed = [] } = await chrome.storage.local.get("fw_feed");
   state.feed = fw_feed;
+}
+
+// Auctions closing right now, fetched only while the Auctions tab is open.
+// Polling this in the background would spend requests on a bid-now list nobody
+// is looking at; asking at open time also means the countdowns are accurate the
+// moment you look, rather than up to a minute stale.
+async function loadClosing() {
+  const active = state.searches.filter(
+    (s) => s.active && (s.buying_options ?? []).includes("AUCTION"));
+  const cutoff = Date.now() + CLOSING_WINDOW_MS;
+  const found = [];
+  for (const s of active) {
+    try {
+      const res = await searchEbay({
+        // No searchId: this must not touch the seen-set or mark week-old
+        // auctions as new listings.
+        keywords: ebayQuery(s.keywords),
+        priceMin: s.price_min, priceMax: s.price_max,
+        buyingOptions: ["AUCTION"], usOnly: s.us_only,
+        categoryIds: s.category_ids ?? undefined,
+        conditionIds: s.condition_ids ?? undefined,
+        blockedSellers: s.blocked_sellers,
+        sort: "endingSoonest",
+      });
+      for (const it of applyExclusions(s.keywords, res.items ?? [])) {
+        if (it.endTime && new Date(it.endTime).getTime() <= cutoff) {
+          found.push({ ...it, searchId: s.id, searchLabel: s.label });
+        }
+      }
+    } catch (e) { console.warn(`closing ${s.label}:`, e.message); }
+  }
+  state.closing = found;
 }
 async function loadSaved() {
   try {
@@ -260,15 +294,28 @@ function renderAuctions() {
 
   if (!allowed) { $("auction-empty").style.display = "none"; return; }
 
-  const items = state.feed
-    .filter((i) => (i.buyingOptions ?? []).includes("AUCTION") && i.endTime)
-    .sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
+  // Only auctions actually closing: this is a "bid now" list. They come from
+  // their own store, because the newest-first feed never holds an auction long
+  // enough to reach its final minutes.
+  const now = Date.now();
+  const items = state.closing
+    .filter((i) => {
+      const left = new Date(i.endTime).getTime() - now;
+      return left > 0 && left <= CLOSING_WINDOW_MS;
+    })
+    .sort((a, b) => new Date(a.endTime) - new Date(b.endTime))
+    .slice(0, 20);
   $("auction-empty").style.display = items.length ? "none" : "block";
   const frag = document.createDocumentFragment();
-  for (const item of items.slice(0, 60)) frag.append(makeCard(item, { auction: true }));
+  for (const item of items) frag.append(makeCard(item, { auction: true }));
   list.append(frag);
   tickCountdowns();
 }
+
+// While the Auctions tab is open, re-ask often enough that an auction entering
+// its last five minutes shows up with time left to act on it.
+const CLOSING_REFRESH_MS = 30_000;
+let closingTimer = null;
 
 let cdTimer = null;
 function tickCountdowns() {
@@ -665,6 +712,14 @@ document.querySelectorAll(".tab").forEach((t) =>
       p.classList.toggle("on", p.id === `tab-${t.dataset.tab}`));
     if (t.dataset.tab === "portfolio") { await loadPortfolio(); renderPortfolio(); }
     if (t.dataset.tab === "saved") { await loadSaved(); renderSaved(); }
+    // Refresh closing auctions only while that tab is actually being watched.
+    clearInterval(closingTimer);
+    if (t.dataset.tab === "auctions") {
+      await loadClosing(); renderAuctions();
+      closingTimer = setInterval(async () => {
+        await loadClosing(); renderAuctions();
+      }, CLOSING_REFRESH_MS);
+    }
   }));
 
 $("btn-settings").addEventListener("click", () => chrome.runtime.openOptionsPage());

@@ -59,7 +59,11 @@ async function pollSearch(searchId) {
       categoryIds: search.category_ids ?? undefined,
       conditionIds: search.condition_ids ?? undefined,
       blockedSellers: search.blocked_sellers,
-      sort: (search.buying_options ?? []).includes("AUCTION") ? "endingSoonest" : "newlyListed",
+      // Always newest-first. The Auctions tab re-sorts by end time in the
+      // browser, so asking eBay for endingSoonest bought nothing and cost us
+      // new-listing detection entirely: a "Both" search returned listings a
+      // week old and nothing under 10 minutes.
+      sort: "newlyListed",
     });
   } catch (e) {
     if (e instanceof AuthError ||
@@ -93,7 +97,9 @@ async function pollSearch(searchId) {
     .map((id) => result.items.find((i) => i.itemId === id))
     .filter(Boolean);
   if (fresh.length) await notifyNewItems(search, fresh);
+
 }
+
 
 // chrome.storage has no transactions: two polls finishing together interleave
 // their read-modify-writes of fw_feed / fw_unseen and drop each other's

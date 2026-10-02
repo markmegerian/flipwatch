@@ -326,7 +326,7 @@
 
     <section id="tab-auctions" class="pane">
       <div id="auctions"></div>
-      <div id="auctions-empty" class="empty">Auction listings from your searches appear here with live countdowns.</div>
+      <div id="auctions-empty" class="empty">Nothing closing right now.<br>Auctions appear here in their final 5 minutes, soonest first.</div>
     </section>
 
     <section id="tab-saved" class="pane">
@@ -371,8 +371,13 @@ const AUTH = SUPABASE_URL + "/auth/v1", REST = SUPABASE_URL + "/rest/v1", FN = S
 const H = { "Content-Type": "application/json", apikey: ANON };
 
 const $ = (id) => document.getElementById(id);
-const state = { session: null, sub: null, limits: [], searches: [], feed: [], saved: [],
-                savedBy: new Map(), portfolio: [], filter: "" };
+const state = { session: null, sub: null, limits: [], searches: [], feed: [], closing: [],
+                saved: [], savedBy: new Map(), portfolio: [], filter: "" };
+
+// Auctions are only surfaced in their final stretch — the Auctions tab is a
+// "bid now" list. Polling is newest-first, so they are fetched separately by
+// soonest-ending; the newest-first feed never holds one long enough to close.
+const CLOSING_WINDOW_MS = 5 * 60 * 1000;
 
 // ── Session ───────────────────────────────────────────────────────────────────
 const SKEY = "fw_session";
@@ -595,6 +600,45 @@ function cacheFeed() {
   catch {}
 }
 
+// Auctions closing right now, fetched only while the Auctions tab is open.
+// Polling this in the background would spend requests on a bid-now list nobody
+// is looking at; fetching at open time also means countdowns are accurate the
+// moment you look.
+const CLOSING_REFRESH_MS = 30_000;
+let closingTimer = null;
+
+async function loadClosing() {
+  const active = state.searches.filter(
+    (s) => s.active && (s.buying_options ?? []).includes("AUCTION"));
+  const cutoff = Date.now() + CLOSING_WINDOW_MS;
+  const found = [];
+  for (const s of active) {
+    try {
+      const r = await api(`${FN}/ebay-search`, {
+        method: "POST",
+        body: JSON.stringify({
+          // No searchId: must not touch the seen-set or mark old auctions new.
+          keywords: ebayQuery(s.keywords),
+          priceMin: s.price_min, priceMax: s.price_max,
+          buyingOptions: ["AUCTION"], usOnly: s.us_only,
+          categoryIds: s.category_ids ?? undefined,
+          conditionIds: s.condition_ids ?? undefined,
+          blockedSellers: s.blocked_sellers,
+          sort: "endingSoonest",
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) continue;
+      for (const it of applyExclusions(s.keywords, j.items ?? [])) {
+        if (it.endTime && new Date(it.endTime).getTime() <= cutoff) {
+          found.push({ ...it, searchId: s.id, searchLabel: s.label });
+        }
+      }
+    } catch { /* a closing miss shouldn't break the tab */ }
+  }
+  state.closing = found;
+}
+
 let busy = false, queued = false;
 async function refreshFeed() {
   // Don't drop a refresh that lands mid-flight — saving a search during the
@@ -620,7 +664,8 @@ async function refreshFeed() {
           categoryIds: s.category_ids ?? undefined,
           conditionIds: s.condition_ids ?? undefined,
           blockedSellers: s.blocked_sellers,
-          sort: (s.buying_options ?? []).includes("AUCTION") ? "endingSoonest" : "newlyListed",
+          // Always newest-first; the Auctions tab re-sorts by end time locally.
+          sort: "newlyListed",
         }),
       });
       const j = await r.json();
@@ -641,6 +686,8 @@ async function refreshFeed() {
   }
 
   state.feed = state.feed.slice(0, 200);
+
+
   cacheFeed(); renderAll();
   busy = false;
   $("refresh").querySelector("svg").classList.remove("spin");
@@ -939,12 +986,17 @@ function renderFeed() {
 function renderAuctions() {
   const list = $("auctions");
   list.textContent = "";
-  const items = state.feed
-    .filter((i) => (i.buyingOptions ?? []).includes("AUCTION") && i.endTime)
-    .sort((a, b) => new Date(a.endTime) - new Date(b.endTime));
+  const now = Date.now();
+  const items = state.closing
+    .filter((i) => {
+      const left = new Date(i.endTime).getTime() - now;
+      return left > 0 && left <= CLOSING_WINDOW_MS;
+    })
+    .sort((a, b) => new Date(a.endTime) - new Date(b.endTime))
+    .slice(0, 20);
   $("auctions-empty").hidden = items.length > 0;
   const frag = document.createDocumentFragment();
-  for (const i of items.slice(0, 60)) frag.append(card(i, { auction: true }));
+  for (const i of items) frag.append(card(i, { auction: true }));
   list.append(frag);
 }
 
@@ -1100,6 +1152,13 @@ for (const t of document.querySelectorAll(".tab")) {
     window.scrollTo(0, 0);
     if (t.dataset.tab === "portfolio") { await loadPortfolio(); renderPortfolio(); }
     if (t.dataset.tab === "saved") { await loadSaved(); renderSaved(); }
+    clearInterval(closingTimer);
+    if (t.dataset.tab === "auctions") {
+      await loadClosing(); renderAuctions();
+      closingTimer = setInterval(async () => {
+        await loadClosing(); renderAuctions();
+      }, CLOSING_REFRESH_MS);
+    }
   });
 }
 
