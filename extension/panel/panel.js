@@ -109,11 +109,40 @@ async function loadSearches() {
   try { state.searches = await db.listSearches(); } catch { state.searches = []; }
 }
 async function loadFeedFromCache() {
-  const { fw_feed = [], fw_closing = [] } = await chrome.storage.local.get(
-    ["fw_feed", "fw_closing"],
-  );
+  const { fw_feed = [] } = await chrome.storage.local.get("fw_feed");
   state.feed = fw_feed;
-  state.closing = fw_closing;
+}
+
+// Auctions closing right now, fetched only while the Auctions tab is open.
+// Polling this in the background would spend requests on a bid-now list nobody
+// is looking at; asking at open time also means the countdowns are accurate the
+// moment you look, rather than up to a minute stale.
+async function loadClosing() {
+  const active = state.searches.filter(
+    (s) => s.active && (s.buying_options ?? []).includes("AUCTION"));
+  const cutoff = Date.now() + CLOSING_WINDOW_MS;
+  const found = [];
+  for (const s of active) {
+    try {
+      const res = await searchEbay({
+        // No searchId: this must not touch the seen-set or mark week-old
+        // auctions as new listings.
+        keywords: ebayQuery(s.keywords),
+        priceMin: s.price_min, priceMax: s.price_max,
+        buyingOptions: ["AUCTION"], usOnly: s.us_only,
+        categoryIds: s.category_ids ?? undefined,
+        conditionIds: s.condition_ids ?? undefined,
+        blockedSellers: s.blocked_sellers,
+        sort: "endingSoonest",
+      });
+      for (const it of applyExclusions(s.keywords, res.items ?? [])) {
+        if (it.endTime && new Date(it.endTime).getTime() <= cutoff) {
+          found.push({ ...it, searchId: s.id, searchLabel: s.label });
+        }
+      }
+    } catch (e) { console.warn(`closing ${s.label}:`, e.message); }
+  }
+  state.closing = found;
 }
 async function loadSaved() {
   try {
@@ -282,6 +311,11 @@ function renderAuctions() {
   list.append(frag);
   tickCountdowns();
 }
+
+// While the Auctions tab is open, re-ask often enough that an auction entering
+// its last five minutes shows up with time left to act on it.
+const CLOSING_REFRESH_MS = 30_000;
+let closingTimer = null;
 
 let cdTimer = null;
 function tickCountdowns() {
@@ -678,6 +712,14 @@ document.querySelectorAll(".tab").forEach((t) =>
       p.classList.toggle("on", p.id === `tab-${t.dataset.tab}`));
     if (t.dataset.tab === "portfolio") { await loadPortfolio(); renderPortfolio(); }
     if (t.dataset.tab === "saved") { await loadSaved(); renderSaved(); }
+    // Refresh closing auctions only while that tab is actually being watched.
+    clearInterval(closingTimer);
+    if (t.dataset.tab === "auctions") {
+      await loadClosing(); renderAuctions();
+      closingTimer = setInterval(async () => {
+        await loadClosing(); renderAuctions();
+      }, CLOSING_REFRESH_MS);
+    }
   }));
 
 $("btn-settings").addEventListener("click", () => chrome.runtime.openOptionsPage());

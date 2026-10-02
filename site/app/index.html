@@ -600,6 +600,45 @@ function cacheFeed() {
   catch {}
 }
 
+// Auctions closing right now, fetched only while the Auctions tab is open.
+// Polling this in the background would spend requests on a bid-now list nobody
+// is looking at; fetching at open time also means countdowns are accurate the
+// moment you look.
+const CLOSING_REFRESH_MS = 30_000;
+let closingTimer = null;
+
+async function loadClosing() {
+  const active = state.searches.filter(
+    (s) => s.active && (s.buying_options ?? []).includes("AUCTION"));
+  const cutoff = Date.now() + CLOSING_WINDOW_MS;
+  const found = [];
+  for (const s of active) {
+    try {
+      const r = await api(`${FN}/ebay-search`, {
+        method: "POST",
+        body: JSON.stringify({
+          // No searchId: must not touch the seen-set or mark old auctions new.
+          keywords: ebayQuery(s.keywords),
+          priceMin: s.price_min, priceMax: s.price_max,
+          buyingOptions: ["AUCTION"], usOnly: s.us_only,
+          categoryIds: s.category_ids ?? undefined,
+          conditionIds: s.condition_ids ?? undefined,
+          blockedSellers: s.blocked_sellers,
+          sort: "endingSoonest",
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) continue;
+      for (const it of applyExclusions(s.keywords, j.items ?? [])) {
+        if (it.endTime && new Date(it.endTime).getTime() <= cutoff) {
+          found.push({ ...it, searchId: s.id, searchLabel: s.label });
+        }
+      }
+    } catch { /* a closing miss shouldn't break the tab */ }
+  }
+  state.closing = found;
+}
+
 let busy = false, queued = false;
 async function refreshFeed() {
   // Don't drop a refresh that lands mid-flight — saving a search during the
@@ -648,34 +687,6 @@ async function refreshFeed() {
 
   state.feed = state.feed.slice(0, 200);
 
-  // Auctions closing now, asked for separately and sorted by soonest-ending.
-  // No searchId: this must not touch the seen-set or mark week-old auctions new.
-  const cutoff = Date.now() + CLOSING_WINDOW_MS;
-  const closing = [];
-  for (const s of active.filter((s) => (s.buying_options ?? []).includes("AUCTION"))) {
-    try {
-      const r = await api(`${FN}/ebay-search`, {
-        method: "POST",
-        body: JSON.stringify({
-          keywords: ebayQuery(s.keywords),
-          priceMin: s.price_min, priceMax: s.price_max,
-          buyingOptions: ["AUCTION"], usOnly: s.us_only,
-          categoryIds: s.category_ids ?? undefined,
-          conditionIds: s.condition_ids ?? undefined,
-          blockedSellers: s.blocked_sellers,
-          sort: "endingSoonest",
-        }),
-      });
-      const j = await r.json();
-      if (!r.ok) continue;
-      for (const it of applyExclusions(s.keywords, j.items ?? [])) {
-        if (it.endTime && new Date(it.endTime).getTime() <= cutoff) {
-          closing.push({ ...it, searchId: s.id, searchLabel: s.label });
-        }
-      }
-    } catch { /* a closing-auction miss shouldn't fail the whole refresh */ }
-  }
-  state.closing = closing;
 
   cacheFeed(); renderAll();
   busy = false;
@@ -1141,6 +1152,13 @@ for (const t of document.querySelectorAll(".tab")) {
     window.scrollTo(0, 0);
     if (t.dataset.tab === "portfolio") { await loadPortfolio(); renderPortfolio(); }
     if (t.dataset.tab === "saved") { await loadSaved(); renderSaved(); }
+    clearInterval(closingTimer);
+    if (t.dataset.tab === "auctions") {
+      await loadClosing(); renderAuctions();
+      closingTimer = setInterval(async () => {
+        await loadClosing(); renderAuctions();
+      }, CLOSING_REFRESH_MS);
+    }
   });
 }
 
